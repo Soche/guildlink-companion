@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GuildLink Companion</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #fff; --text: #1d1d1f; --muted: #6b6b70; --line: #e3e1dc;
+    --accent: #2f6fdd; --ok: #1f8a4c; --warn: #b8660b; --err: #c2352b;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161618; --panel: #1f1f22; --text: #ececee; --muted: #9a9aa2; --line: #333338;
+      --accent: #6b9cf0; --ok: #4cc27f; --warn: #e2a14a; --err: #ef6a5f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 20px 48px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .muted { color: var(--muted); font-size: 13px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+  .banner { border-left: 4px solid var(--warn); }
+  .banner.ok { border-left-color: var(--ok); }
+  .file { border-top: 1px solid var(--line); padding: 12px 0; }
+  .file:first-of-type { border-top: 0; padding-top: 0; }
+  .file .path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+  .err { color: var(--err); }
+  .good { color: var(--ok); }
+  label { display: block; font-weight: 600; margin: 14px 0 4px; }
+  label.check { font-weight: 400; display: flex; gap: 8px; align-items: flex-start; }
+  input[type=text], input[type=password], input[type=url] {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chips button { font-size: 12px; padding: 3px 8px; }
+  #testResult { margin-top: 10px; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>GuildLink Companion</h1>
+    <span class="muted">v{{.Version}}</span>
+  </header>
+
+  <section id="banner" class="banner"><span id="bannerText">Checking…</span></section>
+
+  <section>
+    <h2>Uploads</h2>
+    <div id="files" class="muted">No saved data found yet.</div>
+    <div class="row"><button type="button" id="syncBtn">Sync now</button></div>
+  </section>
+
+  <section>
+    <h2>Settings</h2>
+    {{if .Saved}}<p class="good">Settings saved.</p>{{end}}
+    {{if .SaveError}}<p class="err">{{.SaveError}}</p>{{end}}
+    <form method="post" action="/settings">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+
+      <label for="serverUrl">Server address</label>
+      <input type="url" id="serverUrl" name="serverUrl" value="{{.Settings.ServerURL}}" placeholder="https://guildlink.example.com">
+
+      <label for="token">Token</label>
+      <input type="password" id="token" name="token" autocomplete="off"
+        placeholder="{{if .TokenSet}}Saved. Leave blank to keep it{{else}}glk_…{{end}}">
+      <div class="hint">Run <code>/link</code> in your Discord server to get both.</div>
+
+      <label for="wowDir">World of Warcraft folder</label>
+      <input type="text" id="wowDir" name="wowDir" value="{{.Settings.WowDir}}" placeholder="The folder that contains _classic_beta_, _retail_ …">
+      {{if .Detected}}
+      <div class="chips">{{range .Detected}}<button type="button" class="pick" data-dir="{{.}}">{{.}}</button>{{end}}</div>
+      {{else}}
+      <div class="hint">No install found in the usual places; paste the path.</div>
+      {{end}}
+
+      <label class="check"><input type="checkbox" name="writeSeed" {{if .Settings.WriteSeed}}checked{{end}}>
+        <span>Keep addon data between sessions<br><span class="hint">Copies your saved data into the addon's Seed.lua, because the Forever beta client doesn't load it back at startup.</span></span></label>
+      <label class="check"><input type="checkbox" name="openOnLaunch" {{if .Settings.OpenOnLaunch}}checked{{end}}>
+        <span>Open this page when the companion starts</span></label>
+
+      <div class="row">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="testBtn">Test connection</button>
+      </div>
+      <div id="testResult"></div>
+    </form>
+    <p class="hint">Settings file: {{.ConfigPath}}</p>
+  </section>
+</main>
+<script>
+const csrf = {{.CSRF}};
+const post = (url) => fetch(url, { method: "POST", headers: { "X-CSRF-Token": csrf } });
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const when = (t) => (t && !t.startsWith("0001")) ? new Date(t).toLocaleString() : null;
+
+document.querySelectorAll(".pick").forEach((b) => b.addEventListener("click", () => {
+  document.getElementById("wowDir").value = b.dataset.dir;
+}));
+
+document.getElementById("syncBtn").addEventListener("click", async () => { await post("/sync"); setTimeout(refresh, 800); });
+
+document.getElementById("testBtn").addEventListener("click", async () => {
+  const out = document.getElementById("testResult");
+  out.textContent = "Testing…";
+  const res = await (await post("/test")).json();
+  if (res.error) { out.innerHTML = `<span class="err">${esc(res.error)}</span>`; return; }
+  const chars = (res.characters || []).map((c) => c.name).join(", ") || "none yet";
+  out.innerHTML = `<span class="good">Connected as Discord user ${esc(res.discordUserId)}.</span> Characters on the server: ${esc(chars)}.`;
+});
+
+async function refresh() {
+  let st;
+  try { st = await (await fetch("/status")).json(); } catch { return; }
+  const banner = document.getElementById("banner");
+  const text = document.getElementById("bannerText");
+  const files = st.files || [];
+  const failing = files.filter((f) => f.lastError);
+  if (st.problem) {
+    banner.className = "banner"; text.textContent = st.problem;
+  } else if (failing.length) {
+    banner.className = "banner"; text.textContent = "Some uploads are failing; see below.";
+  } else {
+    banner.className = "banner ok";
+    text.textContent = files.length ? "Watching for changes. New data uploads a few seconds after you log out or /reload." : "Waiting for saved data.";
+  }
+  if (!files.length) return;
+  document.getElementById("files").innerHTML = files.map((f) => {
+    const r = f.result;
+    const rejected = r && r.rejected && r.rejected.length
+      ? `<div class="err">Not accepted: ${r.rejected.map((x) => esc(x.name) + " (" + esc(x.reason) + ")").join(", ")}</div>` : "";
+    const synced = when(f.lastSync);
+    return `<div class="file">
+      <div><strong>${esc(f.flavor)}</strong> · account ${esc(f.account)} · ${f.characters} characters, ${f.recipes} recipes</div>
+      <div class="muted">Addon Discord ID: ${esc(f.discordId || "not set (use /guildlink in game)")}</div>
+      <div class="muted">${synced ? "Last upload " + esc(synced) + (r ? `: ${r.accepted} characters, ${r.recipesStored} recipes stored` : "") : "Not uploaded yet"}</div>
+      ${f.lastError ? `<div class="err">${esc(f.lastError)}</div>` : ""}${rejected}
+      <div class="path">${esc(f.path)}</div>
+    </div>`;
+  }).join("");
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
