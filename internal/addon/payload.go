@@ -16,6 +16,12 @@ type Recipe struct {
 	RecipeID int64  `json:"recipeId"`
 	Name     string `json:"name"`
 	ItemID   *int64 `json:"itemId"`
+	// What the crafted item is, for browsing by category (nil from addons before 0.3.0).
+	ClassID    *int64  `json:"classId"`
+	SubclassID *int64  `json:"subclassId"`
+	EquipLoc   *string `json:"equipLoc"`
+	Enchant    bool    `json:"enchant"`
+	Category   *string `json:"category"` // the profession window's category name
 }
 
 type Profession struct {
@@ -135,7 +141,12 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 					if !ok || err != nil || rname == "" {
 						continue
 					}
-					prof.Recipes = append(prof.Recipes, Recipe{RecipeID: id, Name: rname, ItemID: num(r, "itemID")})
+					enchant, _ := r["enchant"].(bool)
+					prof.Recipes = append(prof.Recipes, Recipe{
+						RecipeID: id, Name: rname, ItemID: num(r, "itemID"),
+						ClassID: num(r, "classID"), SubclassID: num(r, "subclassID"), EquipLoc: str(r, "equipLoc"),
+						Enchant: enchant, Category: str(r, "category"),
+					})
 				}
 			}
 			c.Professions = append(c.Professions, prof)
