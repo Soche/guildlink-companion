@@ -41,10 +41,19 @@ type Character struct {
 	Professions []Profession `json:"professions"`
 }
 
+// Instance is a dungeon or raid a character has been inside.
+type Instance struct {
+	InstanceID int64  `json:"instanceId"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind"` // "dungeon" or "raid"
+	MaxPlayers int64  `json:"maxPlayers"`
+}
+
 type Payload struct {
 	AddonSchema int64       `json:"addonSchema"`
 	DiscordID   *string     `json:"discordId"`
 	Characters  []Character `json:"characters"`
+	Instances   []Instance  `json:"instances"`
 }
 
 func str(t luasv.Table, k string) *string {
@@ -77,7 +86,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s not found; log in with the addon enabled, then log out or /reload", Global)
 	}
-	p := &Payload{Characters: []Character{}}
+	p := &Payload{Characters: []Character{}, Instances: []Instance{}}
 	if v, ok := db.Int("schema"); ok {
 		p.AddonSchema = v
 	}
@@ -132,6 +141,22 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 			c.Professions = append(c.Professions, prof)
 		}
 		p.Characters = append(p.Characters, c)
+	}
+
+	insts, _ := db.Table("instances")
+	for _, key := range sortedKeys(insts) {
+		it, ok := insts.Table(key)
+		id, err := strconv.ParseInt(key, 10, 64)
+		if !ok || err != nil || id <= 0 {
+			continue
+		}
+		name, _ := it.String("name")
+		kind, _ := it.String("kind")
+		players, _ := it.Int("maxPlayers")
+		if name == "" || (kind != "dungeon" && kind != "raid") || players < 1 || players > 40 {
+			continue
+		}
+		p.Instances = append(p.Instances, Instance{InstanceID: id, Name: name, Kind: kind, MaxPlayers: players})
 	}
 	return p, nil
 }

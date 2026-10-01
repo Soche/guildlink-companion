@@ -19,6 +19,10 @@ func TestFromSavedVariables(t *testing.T) {
 						["recipes"] = { [2330] = { ["name"] = "Minor Healing Potion", ["itemID"] = 118 } } },
 				} },
 		},
+		["instances"] = {
+			[2050] = { ["name"] = "Hyjal Summit", ["kind"] = "raid", ["maxPlayers"] = 20, ["seenAt"] = 5 },
+			[9] = { ["name"] = "Arena", ["kind"] = "pvp", ["maxPlayers"] = 5 },
+		},
 	}`)
 	if err != nil {
 		t.Fatal(err)
@@ -28,7 +32,7 @@ func TestFromSavedVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(p)
-	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}]}`
+	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}],"instances":[{"instanceId":2050,"name":"Hyjal Summit","kind":"raid","maxPlayers":20}]}`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}

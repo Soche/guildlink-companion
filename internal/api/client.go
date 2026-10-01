@@ -39,7 +39,8 @@ type SyncResult struct {
 		Realm  string `json:"realm"`
 		Reason string `json:"reason"`
 	} `json:"rejected"`
-	RecipesStored int `json:"recipesStored"`
+	RecipesStored    int `json:"recipesStored"`
+	InstancesUpdated int `json:"instancesUpdated"`
 }
 
 // Error is a non-2xx answer; Message is the server's explanation when it gave one.
