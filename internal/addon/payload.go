@@ -22,6 +22,38 @@ type Recipe struct {
 	EquipLoc   *string `json:"equipLoc"`
 	Enchant    bool    `json:"enchant"`
 	Category   *string `json:"category"` // the profession window's category name
+	// Required materials (nil from addons before 0.4.0).
+	Reagents []Reagent `json:"reagents,omitempty"`
+}
+
+type Reagent struct {
+	ItemID int64   `json:"itemId"`
+	Count  int64   `json:"count"`
+	Name   *string `json:"name"` // nil when the game hadn't loaded the item's name yet
+}
+
+// reagentsOf reads the addon's positional reagent list, in order.
+func reagentsOf(r luasv.Table) []Reagent {
+	list, ok := r.Table("reagents")
+	if !ok {
+		return nil
+	}
+	var out []Reagent
+	for i := 1; ; i++ {
+		e, ok := list.Table(strconv.Itoa(i))
+		if !ok {
+			return out
+		}
+		id, ok := e.Int("itemID")
+		if !ok || id <= 0 {
+			continue
+		}
+		count, ok := e.Int("count")
+		if !ok || count < 1 {
+			count = 1
+		}
+		out = append(out, Reagent{ItemID: id, Count: count, Name: str(e, "name")})
+	}
 }
 
 type Profession struct {
@@ -145,7 +177,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 					prof.Recipes = append(prof.Recipes, Recipe{
 						RecipeID: id, Name: rname, ItemID: num(r, "itemID"),
 						ClassID: num(r, "classID"), SubclassID: num(r, "subclassID"), EquipLoc: str(r, "equipLoc"),
-						Enchant: enchant, Category: str(r, "category"),
+						Enchant: enchant, Category: str(r, "category"), Reagents: reagentsOf(r),
 					})
 				}
 			}
