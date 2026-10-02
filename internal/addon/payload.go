@@ -68,6 +68,7 @@ type Profession struct {
 type Character struct {
 	Name        string       `json:"name"`
 	Realm       string       `json:"realm"`
+	Region      *string      `json:"region"` // "EU", "US", ... (nil from addons before 0.5.0)
 	Class       *string      `json:"class"`
 	ClassName   *string      `json:"className"`
 	Race        *string      `json:"race"`
@@ -142,7 +143,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 		}
 		realm, _ := ct.String("realm")
 		c := Character{
-			Name: name, Realm: realm,
+			Name: name, Realm: realm, Region: str(ct, "region"),
 			Class: str(ct, "class"), ClassName: str(ct, "className"),
 			Race: str(ct, "race"), Faction: str(ct, "faction"),
 			Level: num(ct, "level"), Guild: str(ct, "guild"), GuildRank: str(ct, "guildRank"),

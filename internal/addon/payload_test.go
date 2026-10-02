@@ -12,7 +12,7 @@ func TestFromSavedVariables(t *testing.T) {
 		["schema"] = 1,
 		["discordId"] = "123456789012345678",
 		["characters"] = {
-			["Jaina-"] = { ["name"] = "Jaina", ["realm"] = "", ["level"] = 12, ["class"] = "MAGE", ["updatedAt"] = 1000,
+			["Jaina-"] = { ["name"] = "Jaina", ["realm"] = "", ["region"] = "EU", ["level"] = 12, ["class"] = "MAGE", ["updatedAt"] = 1000,
 				["professions"] = {
 					[197] = { ["name"] = "Tailoring", ["rank"] = 40, ["maxRank"] = 75 },
 					[171] = { ["name"] = "Alchemy", ["rank"] = 5, ["scannedAt"] = 999,
@@ -33,7 +33,7 @@ func TestFromSavedVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(p)
-	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118,"classId":0,"subclassId":1,"equipLoc":null,"enchant":false,"category":"Potions","reagents":[{"itemId":2447,"count":1,"name":"Peacebloom"},{"itemId":765,"count":2,"name":null}]}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}],"instances":[{"instanceId":2050,"name":"Hyjal Summit","kind":"raid","maxPlayers":20}]}`
+	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","region":"EU","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118,"classId":0,"subclassId":1,"equipLoc":null,"enchant":false,"category":"Potions","reagents":[{"itemId":2447,"count":1,"name":"Peacebloom"},{"itemId":765,"count":2,"name":null}]}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}],"instances":[{"instanceId":2050,"name":"Hyjal Summit","kind":"raid","maxPlayers":20}]}`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
