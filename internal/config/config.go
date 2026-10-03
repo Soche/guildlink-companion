@@ -16,6 +16,11 @@ type Settings struct {
 	WowDir       string `json:"wowDir"`
 	WriteSeed    bool   `json:"writeSeed"`
 	OpenOnLaunch bool   `json:"openOnLaunch"`
+	// Updates are on unless turned off, so older settings files keep them on.
+	DisableAutoUpdate bool `json:"disableAutoUpdate"`
+	// Game flavor folders (e.g. "_classic_beta_") to keep the addon
+	// installed in; empty means pick automatically.
+	AddonFlavors []string `json:"addonFlavors"`
 }
 
 func (s Settings) Ready() bool { return s.ServerURL != "" && s.Token != "" && s.WowDir != "" }

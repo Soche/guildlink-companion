@@ -20,11 +20,12 @@ import (
 	"guildlink/companion/internal/api"
 	"guildlink/companion/internal/config"
 	"guildlink/companion/internal/syncer"
+	"guildlink/companion/internal/update"
 	"guildlink/companion/internal/wow"
 )
 
-// PreferredPort is tried first so the page's address stays the same between runs.
-const PreferredPort = 47631
+// DefaultPort is tried first so the page's address stays the same between runs.
+const DefaultPort = 47631
 
 //go:embed index.html
 var indexHTML string
@@ -34,6 +35,7 @@ var page = template.Must(template.New("index").Parse(indexHTML))
 type Server struct {
 	store   *config.Store
 	syncer  *syncer.Syncer
+	updater *update.Updater
 	version string
 	csrf    string
 	port    int
@@ -41,8 +43,8 @@ type Server struct {
 }
 
 // Listen binds to localhost only; nothing here is reachable from the network.
-func Listen(store *config.Store, s *syncer.Syncer, version string) (*Server, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(PreferredPort))
+func Listen(store *config.Store, s *syncer.Syncer, u *update.Updater, version string, port int) (*Server, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
 	if err != nil {
 		ln, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
@@ -53,13 +55,16 @@ func Listen(store *config.Store, s *syncer.Syncer, version string) (*Server, err
 	if _, err := rand.Read(b); err != nil {
 		return nil, err
 	}
-	w := &Server{store: store, syncer: s, version: version, csrf: hex.EncodeToString(b), port: ln.Addr().(*net.TCPAddr).Port}
+	w := &Server{store: store, syncer: s, updater: u, version: version, csrf: hex.EncodeToString(b), port: ln.Addr().(*net.TCPAddr).Port}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", w.index)
 	mux.HandleFunc("GET /status", w.status)
 	mux.HandleFunc("POST /settings", w.saveSettings)
 	mux.HandleFunc("POST /sync", w.syncNow)
 	mux.HandleFunc("POST /test", w.testConnection)
+	mux.HandleFunc("GET /updates", w.updateStatus)
+	mux.HandleFunc("POST /updates/check", w.updateCheck)
+	mux.HandleFunc("POST /updates/apply", w.updateApply)
 	w.srv = &http.Server{Handler: w.guard(mux), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = w.srv.Serve(ln) }()
 	return w, nil
@@ -103,6 +108,13 @@ type pageData struct {
 	ConfigPath string
 	Saved      bool
 	SaveError  string
+	AutoUpdate bool
+	Flavors    []flavorChoice
+}
+
+type flavorChoice struct {
+	Name    string
+	Checked bool
 }
 
 func (w *Server) render(rw http.ResponseWriter, saved bool, saveErr string) {
@@ -110,9 +122,20 @@ func (w *Server) render(rw http.ResponseWriter, saved bool, saveErr string) {
 	token := s.Token
 	s.Token = ""
 	rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+	targets := map[string]bool{}
+	for _, f := range update.TargetFlavors(s) {
+		targets[f] = true
+	}
+	var flavors []flavorChoice
+	if s.WowDir != "" {
+		for _, f := range wow.Flavors(s.WowDir) {
+			flavors = append(flavors, flavorChoice{Name: f, Checked: targets[f]})
+		}
+	}
 	_ = page.Execute(rw, pageData{
 		Settings: s, TokenSet: token != "", CSRF: w.csrf, Version: w.version,
 		Detected: wow.DetectInstalls(), ConfigPath: w.store.Path(), Saved: saved, SaveError: saveErr,
+		AutoUpdate: !s.DisableAutoUpdate, Flavors: flavors,
 	})
 }
 
@@ -135,6 +158,9 @@ func (w *Server) saveSettings(rw http.ResponseWriter, r *http.Request) {
 	s.WowDir = r.FormValue("wowDir")
 	s.WriteSeed = r.FormValue("writeSeed") == "on"
 	s.OpenOnLaunch = r.FormValue("openOnLaunch") == "on"
+	s.DisableAutoUpdate = r.FormValue("autoUpdate") != "on"
+	// None ticked means "pick automatically".
+	s.AddonFlavors = r.Form["addonFlavor"]
 
 	if s.WowDir != "" {
 		if info, err := os.Stat(s.WowDir); err != nil || !info.IsDir() {
@@ -153,6 +179,7 @@ func (w *Server) saveSettings(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.syncer.SyncNow()
+	w.updater.CheckNow(false)
 	http.Redirect(rw, r, "/?saved", http.StatusSeeOther)
 }
 
@@ -181,4 +208,23 @@ func (w *Server) testConnection(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = json.NewEncoder(rw).Encode(me)
+}
+
+func (w *Server) updateStatus(rw http.ResponseWriter, _ *http.Request) {
+	st := w.updater.Status()
+	rw.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(rw).Encode(struct {
+		update.Status
+		Targets []string `json:"targets"`
+	}{st, update.TargetFlavors(w.store.Get())})
+}
+
+func (w *Server) updateCheck(rw http.ResponseWriter, _ *http.Request) {
+	w.updater.CheckNow(false)
+	rw.WriteHeader(http.StatusNoContent)
+}
+
+func (w *Server) updateApply(rw http.ResponseWriter, _ *http.Request) {
+	w.updater.CheckNow(true)
+	rw.WriteHeader(http.StatusNoContent)
 }

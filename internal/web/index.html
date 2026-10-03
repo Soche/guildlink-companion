@@ -61,6 +61,15 @@
   </section>
 
   <section>
+    <h2>Updates</h2>
+    <div id="updates" class="muted">Checking…</div>
+    <div class="row">
+      <button type="button" id="checkBtn">Check for updates</button>
+      <button type="button" id="applyBtn">Update now</button>
+    </div>
+  </section>
+
+  <section>
     <h2>Settings</h2>
     {{if .Saved}}<p class="good">Settings saved.</p>{{end}}
     {{if .SaveError}}<p class="err">{{.SaveError}}</p>{{end}}
@@ -87,6 +96,13 @@
         <span>Keep addon data between sessions<br><span class="hint">Copies your saved data into the addon's Seed.lua, because the Forever beta client doesn't load it back at startup.</span></span></label>
       <label class="check"><input type="checkbox" name="openOnLaunch" {{if .Settings.OpenOnLaunch}}checked{{end}}>
         <span>Open this page when the companion starts</span></label>
+      <label class="check"><input type="checkbox" name="autoUpdate" {{if .AutoUpdate}}checked{{end}}>
+        <span>Keep the addon and companion up to date automatically<br><span class="hint">Installs the GuildLink addon if it's missing. Addon updates take effect at your next login or /reload.</span></span></label>
+      {{if .Flavors}}
+      <label>Install the addon in</label>
+      {{range .Flavors}}<label class="check"><input type="checkbox" name="addonFlavor" value="{{.Name}}" {{if .Checked}}checked{{end}}><span><code>{{.Name}}</code></span></label>{{end}}
+      <div class="hint">The game folders inside your World of Warcraft folder. With none ticked, the companion picks: folders that already have the addon, otherwise the Forever one.</div>
+      {{end}}
 
       <div class="row">
         <button type="submit" class="primary">Save</button>
@@ -108,6 +124,31 @@ document.querySelectorAll(".pick").forEach((b) => b.addEventListener("click", ()
 }));
 
 document.getElementById("syncBtn").addEventListener("click", async () => { await post("/sync"); setTimeout(refresh, 800); });
+document.getElementById("checkBtn").addEventListener("click", async () => { await post("/updates/check"); setTimeout(refreshUpdates, 1500); });
+document.getElementById("applyBtn").addEventListener("click", async () => { await post("/updates/apply"); setTimeout(refreshUpdates, 1500); });
+
+async function refreshUpdates() {
+  let u;
+  try { u = await (await fetch("/updates")).json(); } catch { return; }
+  const lines = [];
+  if (u.updatedFrom) lines.push(`<div class="good">Updated from ${esc(u.updatedFrom)} to ${esc(u.companionVersion)}.</div>`);
+  const newer = u.companionLatest && u.companionLatest !== u.companionVersion;
+  lines.push(`<div>Companion <strong>${esc(u.companionVersion)}</strong>${u.companionLatest ? (newer ? ` · <strong>${esc(u.companionLatest)}</strong> available` : " · up to date") : ""}</div>`);
+  if (u.companionError) lines.push(`<div class="err">${esc(u.companionError)}</div>`);
+  const targets = u.addonTargets || [];
+  if (!targets.length) lines.push(`<div>Addon: no game folder chosen yet (set your World of Warcraft folder below).</div>`);
+  for (const t of targets) {
+    const state = t.installed ? `<strong>${esc(t.installed)}</strong>${u.addonLatest && t.installed !== u.addonLatest ? ` · <strong>${esc(u.addonLatest)}</strong> available` : " · up to date"}` : "not installed";
+    lines.push(`<div>Addon in <code>${esc(t.flavor)}</code>: ${state}</div>`);
+    if (t.error) lines.push(`<div class="err">${esc(t.error)}</div>`);
+  }
+  if (u.addonError) lines.push(`<div class="err">${esc(u.addonError)}</div>`);
+  const checked = when(u.lastCheck);
+  lines.push(`<div class="muted">${u.checking ? "Checking now…" : checked ? "Last checked " + esc(checked) : ""}${u.autoUpdate ? "" : " · automatic updates are off"}</div>`);
+  document.getElementById("updates").innerHTML = lines.join("");
+}
+refreshUpdates();
+setInterval(refreshUpdates, 5000);
 
 document.getElementById("testBtn").addEventListener("click", async () => {
   const out = document.getElementById("testResult");

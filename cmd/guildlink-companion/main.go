@@ -16,11 +16,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"guildlink/companion/internal/config"
 	"guildlink/companion/internal/syncer"
+	"guildlink/companion/internal/update"
 	"guildlink/companion/internal/web"
 	"guildlink/companion/internal/wow"
 )
@@ -33,6 +36,8 @@ func main() {
 	noBrowser := flag.Bool("no-browser", false, "do not open the settings page on start")
 	cfgPath := flag.String("config", "", "settings file (default: the user config folder)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
+	updatedFrom := flag.String("updated-from", "", "set by the companion when it restarts after updating itself")
+	port := flag.Int("port", web.DefaultPort, "port for the settings page on 127.0.0.1")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(version)
@@ -47,10 +52,11 @@ func main() {
 		*cfgPath = p
 	}
 	setupLogging(filepath.Dir(*cfgPath))
+	update.CleanupOldExecutable()
 
 	// A second copy would upload everything twice; show the running one instead.
-	if alreadyRunning() {
-		url := fmt.Sprintf("http://127.0.0.1:%d/", web.PreferredPort)
+	if alreadyRunning(*port) {
+		url := fmt.Sprintf("http://127.0.0.1:%d/", *port)
 		log.Printf("already running at %s", url)
 		if !*noBrowser {
 			openBrowser(url)
@@ -70,7 +76,16 @@ func main() {
 	s := syncer.New(store, version)
 	go s.Run(ctx)
 
-	srv, err := web.Listen(store, s, version)
+	// After the updater replaces the binary it asks for a restart: shut
+	// everything down (freeing the settings page's port), then start the new one.
+	var restart atomic.Bool
+	u := update.New(store, version, *updatedFrom, func() {
+		restart.Store(true)
+		cancel()
+	})
+	go u.Run(ctx)
+
+	srv, err := web.Listen(store, s, u, version, *port)
 	if err != nil {
 		log.Fatalf("starting settings page: %v", err)
 	}
@@ -90,6 +105,29 @@ func main() {
 	shutdownCtx, done := context.WithTimeout(context.Background(), 3*time.Second)
 	defer done()
 	_ = srv.Close(shutdownCtx)
+
+	if restart.Load() {
+		if err := update.StartExecutable(restartArgs(os.Args[1:], version)); err != nil {
+			log.Printf("couldn't start the updated companion; start it again by hand: %v", err)
+		}
+	}
+}
+
+// restartArgs keeps the user's flags, doesn't reopen the browser, and tells
+// the new version what it was updated from.
+func restartArgs(args []string, from string) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		a := strings.TrimLeft(args[i], "-")
+		switch {
+		case a == "no-browser" || strings.HasPrefix(a, "updated-from="):
+		case a == "updated-from":
+			i++ // skip its value
+		default:
+			out = append(out, args[i])
+		}
+	}
+	return append(out, "-no-browser", "-updated-from", from)
 }
 
 func setupLogging(dir string) {
@@ -104,9 +142,9 @@ func setupLogging(dir string) {
 	log.SetOutput(io.MultiWriter(os.Stderr, f))
 }
 
-func alreadyRunning() bool {
+func alreadyRunning(port int) bool {
 	client := http.Client{Timeout: time.Second}
-	resp, err := client.Get("http://127.0.0.1:" + strconv.Itoa(web.PreferredPort) + "/status")
+	resp, err := client.Get("http://127.0.0.1:" + strconv.Itoa(port) + "/status")
 	if err != nil {
 		return false
 	}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -130,6 +131,53 @@ func (sv SavedVariables) WriteSeed(content []byte) (bool, error) {
 		return false, err
 	}
 	return true, os.Rename(tmp, path)
+}
+
+// Flavors lists the game flavor folders of an install (_retail_,
+// _classic_beta_, ...).
+func Flavors(installDir string) []string {
+	entries, err := os.ReadDir(installDir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() && len(n) > 2 && strings.HasPrefix(n, "_") && strings.HasSuffix(n, "_") {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// AddOnsDir is where a flavor's addons live.
+func AddOnsDir(installDir, flavor string) string {
+	return filepath.Join(installDir, flavor, "Interface", "AddOns")
+}
+
+// DefaultAddonFlavors picks which flavors get the addon when the user hasn't
+// chosen: ones that already have it, else Forever-looking ones (the addon
+// only loads in the Forever client), else the only flavor installed.
+func DefaultAddonFlavors(installDir string) []string {
+	flavors := Flavors(installDir)
+	var have, forever []string
+	for _, f := range flavors {
+		if info, err := os.Stat(filepath.Join(AddOnsDir(installDir, f), AddonName)); err == nil && info.IsDir() {
+			have = append(have, f)
+		}
+		if l := strings.ToLower(f); strings.Contains(l, "forever") || strings.Contains(l, "classic_beta") {
+			forever = append(forever, f)
+		}
+	}
+	switch {
+	case len(have) > 0:
+		return have
+	case len(forever) > 0:
+		return forever
+	case len(flavors) == 1:
+		return flavors
+	}
+	return nil
 }
 
 // FlavorKey identifies the game flavor folder an SV file belongs to; files
