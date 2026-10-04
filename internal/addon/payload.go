@@ -66,18 +66,19 @@ type Profession struct {
 }
 
 type Character struct {
-	Name        string       `json:"name"`
-	Realm       string       `json:"realm"`
-	Region      *string      `json:"region"` // "EU", "US", ... (nil from addons before 0.5.0)
-	Class       *string      `json:"class"`
-	ClassName   *string      `json:"className"`
-	Race        *string      `json:"race"`
-	Faction     *string      `json:"faction"`
-	Level       *int64       `json:"level"`
-	Guild       *string      `json:"guild"`
-	GuildRank   *string      `json:"guildRank"`
-	UpdatedAt   *int64       `json:"updatedAt"`
-	Professions []Profession `json:"professions"`
+	Name           string       `json:"name"`
+	Realm          string       `json:"realm"`
+	Region         *string      `json:"region"` // "EU", "US", ... (nil from addons before 0.5.0)
+	Class          *string      `json:"class"`
+	ClassName      *string      `json:"className"`
+	Race           *string      `json:"race"`
+	Faction        *string      `json:"faction"`
+	Level          *int64       `json:"level"`
+	Guild          *string      `json:"guild"`
+	GuildRank      *string      `json:"guildRank"`
+	GuildRankIndex *int64       `json:"guildRankIndex"` // 0 = Guild Master
+	UpdatedAt      *int64       `json:"updatedAt"`
+	Professions    []Profession `json:"professions"`
 }
 
 // Instance is a dungeon or raid a character has been inside.
@@ -93,6 +94,26 @@ type Payload struct {
 	DiscordID   *string     `json:"discordId"`
 	Characters  []Character `json:"characters"`
 	Instances   []Instance  `json:"instances"`
+	// In-game guild rosters the account's characters saw (addon 0.6.0+).
+	GuildRosters []GuildRoster `json:"guildRosters"`
+}
+
+type GuildRoster struct {
+	Guild     string         `json:"guild"`
+	Region    *string        `json:"region"`
+	ScannedAt int64          `json:"scannedAt"`
+	Ranks     []GuildRank    `json:"ranks"`
+	Members   []RosterMember `json:"members"`
+}
+
+type GuildRank struct {
+	Index int64  `json:"index"`
+	Name  string `json:"name"`
+}
+
+type RosterMember struct {
+	Name      string `json:"name"` // as the game writes it, e.g. "Name-Realm"
+	RankIndex int64  `json:"rankIndex"`
 }
 
 func str(t luasv.Table, k string) *string {
@@ -125,7 +146,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s not found; log in with the addon enabled, then log out or /reload", Global)
 	}
-	p := &Payload{Characters: []Character{}, Instances: []Instance{}}
+	p := &Payload{Characters: []Character{}, Instances: []Instance{}, GuildRosters: []GuildRoster{}}
 	if v, ok := db.Int("schema"); ok {
 		p.AddonSchema = v
 	}
@@ -146,7 +167,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 			Name: name, Realm: realm, Region: str(ct, "region"),
 			Class: str(ct, "class"), ClassName: str(ct, "className"),
 			Race: str(ct, "race"), Faction: str(ct, "faction"),
-			Level: num(ct, "level"), Guild: str(ct, "guild"), GuildRank: str(ct, "guildRank"),
+			Level: num(ct, "level"), Guild: str(ct, "guild"), GuildRank: str(ct, "guildRank"), GuildRankIndex: num(ct, "guildRankIndex"),
 			UpdatedAt:   num(ct, "updatedAt"),
 			Professions: []Profession{},
 		}
@@ -202,5 +223,43 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 		}
 		p.Instances = append(p.Instances, Instance{InstanceID: id, Name: name, Kind: kind, MaxPlayers: players})
 	}
+	p.GuildRosters = rostersOf(db)
 	return p, nil
+}
+
+func rostersOf(db luasv.Table) []GuildRoster {
+	out := []GuildRoster{}
+	rosters, _ := db.Table("guildRosters")
+	for _, key := range sortedKeys(rosters) {
+		rt, ok := rosters.Table(key)
+		guild, _ := rt.String("guild")
+		scanned, okScan := rt.Int("scannedAt")
+		if !ok || guild == "" || !okScan {
+			continue
+		}
+		r := GuildRoster{Guild: guild, Region: str(rt, "region"), ScannedAt: scanned, Ranks: []GuildRank{}, Members: []RosterMember{}}
+		ranks, _ := rt.Table("ranks")
+		for _, k := range sortedKeys(ranks) {
+			idx, err := strconv.ParseInt(k, 10, 64)
+			name, ok := ranks.String(k)
+			if err == nil && ok {
+				r.Ranks = append(r.Ranks, GuildRank{Index: idx, Name: name})
+			}
+		}
+		sort.Slice(r.Ranks, func(i, j int) bool { return r.Ranks[i].Index < r.Ranks[j].Index })
+		members, _ := rt.Table("members")
+		for i := 1; ; i++ {
+			m, ok := members.Table(strconv.Itoa(i))
+			if !ok {
+				break
+			}
+			name, _ := m.String("name")
+			rank, okRank := m.Int("rankIndex")
+			if name != "" && okRank {
+				r.Members = append(r.Members, RosterMember{Name: name, RankIndex: rank})
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }
