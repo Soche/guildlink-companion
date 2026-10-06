@@ -33,7 +33,7 @@ func TestFromSavedVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(p)
-	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","region":"EU","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"guildRankIndex":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118,"classId":0,"subclassId":1,"equipLoc":null,"enchant":false,"category":"Potions","reagents":[{"itemId":2447,"count":1,"name":"Peacebloom"},{"itemId":765,"count":2,"name":null}]}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}],"instances":[{"instanceId":2050,"name":"Hyjal Summit","kind":"raid","maxPlayers":20}],"guildRosters":[]}`
+	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","region":"EU","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"guildRankIndex":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118,"classId":0,"subclassId":1,"equipLoc":null,"enchant":false,"category":"Potions","reagents":[{"itemId":2447,"count":1,"name":"Peacebloom"},{"itemId":765,"count":2,"name":null}]}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}],"instances":[{"instanceId":2050,"name":"Hyjal Summit","kind":"raid","maxPlayers":20}],"guildRosters":[],"guildBanks":[]}`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
@@ -66,6 +66,28 @@ func TestGuildRosters(t *testing.T) {
 	}
 	got, _ := json.Marshal(p.GuildRosters)
 	want := `[{"guild":"Nobility","region":"EU","scannedAt":500,"ranks":[{"index":0,"name":"Guild Master"},{"index":1,"name":"Officer"}],"members":[{"name":"Soche-Lightbringer","rankIndex":1},{"name":"Boss-Person","rankIndex":0}]}]`
+	if string(got) != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
+func TestGuildBanks(t *testing.T) {
+	vars, err := luasv.Parse(`GuildLinkDB = { ["guildBanks"] = { ["Nobility"] = {
+		["guild"] = "Nobility", ["region"] = "EU", ["scannedAt"] = 900, ["money"] = 1234567, ["numTabs"] = 3,
+		["tabs"] = {
+			[3] = { ["name"] = "Potions", ["scannedAt"] = 899, ["items"] = { { ["slot"] = 98, ["itemID"] = 118, ["name"] = "Minor Healing Potion", ["count"] = 5, ["quality"] = 1 } } },
+			[1] = { ["name"] = "Mats", ["scannedAt"] = 898, ["items"] = {} },
+		},
+	} } }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := FromSavedVariables(vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(p.GuildBanks)
+	want := `[{"guild":"Nobility","region":"EU","scannedAt":900,"money":1234567,"numTabs":3,"tabs":[{"index":1,"name":"Mats","scannedAt":898,"items":[]},{"index":3,"name":"Potions","scannedAt":899,"items":[{"slot":98,"itemId":118,"name":"Minor Healing Potion","count":5,"quality":1}]}]}]`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}

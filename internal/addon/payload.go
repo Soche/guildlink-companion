@@ -96,6 +96,32 @@ type Payload struct {
 	Instances   []Instance  `json:"instances"`
 	// In-game guild rosters the account's characters saw (addon 0.6.0+).
 	GuildRosters []GuildRoster `json:"guildRosters"`
+	// Guild bank tabs the account's characters saw at the vault (addon 0.7.0+).
+	GuildBanks []GuildBank `json:"guildBanks"`
+}
+
+type GuildBank struct {
+	Guild     string    `json:"guild"`
+	Region    *string   `json:"region"`
+	ScannedAt int64     `json:"scannedAt"`
+	Money     *int64    `json:"money"` // copper
+	NumTabs   *int64    `json:"numTabs"`
+	Tabs      []BankTab `json:"tabs"`
+}
+
+type BankTab struct {
+	Index     int64      `json:"index"`
+	Name      string     `json:"name"`
+	ScannedAt int64      `json:"scannedAt"`
+	Items     []BankItem `json:"items"`
+}
+
+type BankItem struct {
+	Slot    int64   `json:"slot"`
+	ItemID  int64   `json:"itemId"`
+	Name    *string `json:"name"`
+	Count   int64   `json:"count"`
+	Quality *int64  `json:"quality"`
 }
 
 type GuildRoster struct {
@@ -146,7 +172,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s not found; log in with the addon enabled, then log out or /reload", Global)
 	}
-	p := &Payload{Characters: []Character{}, Instances: []Instance{}, GuildRosters: []GuildRoster{}}
+	p := &Payload{Characters: []Character{}, Instances: []Instance{}, GuildRosters: []GuildRoster{}, GuildBanks: []GuildBank{}}
 	if v, ok := db.Int("schema"); ok {
 		p.AddonSchema = v
 	}
@@ -224,7 +250,54 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 		p.Instances = append(p.Instances, Instance{InstanceID: id, Name: name, Kind: kind, MaxPlayers: players})
 	}
 	p.GuildRosters = rostersOf(db)
+	p.GuildBanks = banksOf(db)
 	return p, nil
+}
+
+func banksOf(db luasv.Table) []GuildBank {
+	out := []GuildBank{}
+	banks, _ := db.Table("guildBanks")
+	for _, key := range sortedKeys(banks) {
+		bt, ok := banks.Table(key)
+		guild, _ := bt.String("guild")
+		scanned, okScan := bt.Int("scannedAt")
+		if !ok || guild == "" || !okScan {
+			continue
+		}
+		b := GuildBank{Guild: guild, Region: str(bt, "region"), ScannedAt: scanned, Money: num(bt, "money"), NumTabs: num(bt, "numTabs"), Tabs: []BankTab{}}
+		tabs, _ := bt.Table("tabs")
+		for _, tk := range sortedKeys(tabs) {
+			tt, ok := tabs.Table(tk)
+			idx, err := strconv.ParseInt(tk, 10, 64)
+			tabScanned, okTab := tt.Int("scannedAt")
+			if !ok || err != nil || !okTab {
+				continue
+			}
+			name, _ := tt.String("name")
+			tab := BankTab{Index: idx, Name: name, ScannedAt: tabScanned, Items: []BankItem{}}
+			items, _ := tt.Table("items")
+			for i := 1; ; i++ {
+				it, ok := items.Table(strconv.Itoa(i))
+				if !ok {
+					break
+				}
+				id, okID := it.Int("itemID")
+				if !okID || id <= 0 {
+					continue
+				}
+				slot, _ := it.Int("slot")
+				count, okCount := it.Int("count")
+				if !okCount || count < 1 {
+					count = 1
+				}
+				tab.Items = append(tab.Items, BankItem{Slot: slot, ItemID: id, Name: str(it, "name"), Count: count, Quality: num(it, "quality")})
+			}
+			b.Tabs = append(b.Tabs, tab)
+		}
+		sort.Slice(b.Tabs, func(i, j int) bool { return b.Tabs[i].Index < b.Tabs[j].Index })
+		out = append(out, b)
+	}
+	return out
 }
 
 func rostersOf(db luasv.Table) []GuildRoster {
