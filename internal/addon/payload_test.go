@@ -78,6 +78,8 @@ func TestGuildBanks(t *testing.T) {
 			[3] = { ["name"] = "Potions", ["scannedAt"] = 899, ["items"] = { { ["slot"] = 98, ["itemID"] = 118, ["name"] = "Minor Healing Potion", ["count"] = 5, ["quality"] = 1 } } },
 			[1] = { ["name"] = "Mats", ["scannedAt"] = 898, ["items"] = {} },
 		},
+		["observed"] = { [2] = { ["at"] = 897, ["tabs"] = { [1] = true, [3] = false } } },
+		["permissions"] = { ["at"] = 890, ["ranks"] = { [0] = { [1] = true }, [1] = { [3] = false } } },
 	} } }`)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +89,7 @@ func TestGuildBanks(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(p.GuildBanks)
-	want := `[{"guild":"Nobility","region":"EU","scannedAt":900,"money":1234567,"numTabs":3,"tabs":[{"index":1,"name":"Mats","scannedAt":898,"items":[]},{"index":3,"name":"Potions","scannedAt":899,"items":[{"slot":98,"itemId":118,"name":"Minor Healing Potion","count":5,"quality":1}]}]}]`
+	want := `[{"guild":"Nobility","region":"EU","scannedAt":900,"money":1234567,"numTabs":3,"tabs":[{"index":1,"name":"Mats","scannedAt":898,"items":[]},{"index":3,"name":"Potions","scannedAt":899,"items":[{"slot":98,"itemId":118,"name":"Minor Healing Potion","count":5,"quality":1}]}],"access":[{"rank":2,"tab":1,"canView":true,"at":897,"source":"observed"},{"rank":2,"tab":3,"canView":false,"at":897,"source":"observed"},{"rank":0,"tab":1,"canView":true,"at":890,"source":"settings"},{"rank":1,"tab":3,"canView":false,"at":890,"source":"settings"}]}]`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}

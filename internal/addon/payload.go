@@ -107,6 +107,18 @@ type GuildBank struct {
 	Money     *int64    `json:"money"` // copper
 	NumTabs   *int64    `json:"numTabs"`
 	Tabs      []BankTab `json:"tabs"`
+	// Which ranks can view which tabs (addon 0.7.0+).
+	Access []TabAccess `json:"access"`
+}
+
+// TabAccess is one rank's view permission on one tab, either from the
+// guild's settings (read by the Guild Master) or observed by a member.
+type TabAccess struct {
+	Rank    int64  `json:"rank"`
+	Tab     int64  `json:"tab"`
+	CanView bool   `json:"canView"`
+	At      int64  `json:"at"`
+	Source  string `json:"source"` // "settings" or "observed"
 }
 
 type BankTab struct {
@@ -295,6 +307,7 @@ func banksOf(db luasv.Table) []GuildBank {
 			b.Tabs = append(b.Tabs, tab)
 		}
 		sort.Slice(b.Tabs, func(i, j int) bool { return b.Tabs[i].Index < b.Tabs[j].Index })
+		b.Access = append(accessOf(bt, "observed"), accessOf(bt, "permissions")...)
 		out = append(out, b)
 	}
 	return out
@@ -333,6 +346,44 @@ func rostersOf(db luasv.Table) []GuildRoster {
 			}
 		}
 		out = append(out, r)
+	}
+	return out
+}
+
+// accessOf flattens the addon's per-rank tab views. "observed" is keyed
+// rank -> {at, tabs}; "permissions" is {at, ranks: rank -> tabs}.
+func accessOf(bank luasv.Table, key string) []TabAccess {
+	out := []TabAccess{}
+	src, ok := bank.Table(key)
+	if !ok {
+		return out
+	}
+	source := "observed"
+	ranks := src
+	sharedAt, _ := src.Int("at")
+	if key == "permissions" {
+		source = "settings"
+		ranks, _ = src.Table("ranks")
+	}
+	for _, rk := range sortedKeys(ranks) {
+		rank, err := strconv.ParseInt(rk, 10, 64)
+		entry, ok := ranks.Table(rk)
+		if err != nil || !ok {
+			continue
+		}
+		at := sharedAt
+		tabs := entry
+		if source == "observed" {
+			at, _ = entry.Int("at")
+			tabs, _ = entry.Table("tabs")
+		}
+		for _, tk := range sortedKeys(tabs) {
+			tab, err := strconv.ParseInt(tk, 10, 64)
+			canView, isBool := tabs[tk].(bool)
+			if err == nil && isBool && at > 0 {
+				out = append(out, TabAccess{Rank: rank, Tab: tab, CanView: canView, At: at, Source: source})
+			}
+		}
 	}
 	return out
 }
