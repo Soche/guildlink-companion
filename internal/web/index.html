@@ -159,6 +159,14 @@ document.getElementById("testBtn").addEventListener("click", async () => {
   out.innerHTML = `<span class="good">Connected as Discord user ${esc(res.discordUserId)}.</span> Characters on the server: ${esc(chars)}.`;
 });
 
+// "Guild bank: accepted" / "not accepted (...)". Stored and refused counts
+// come from the bot; anything else was older than what it already had.
+function guildLine(label, sent, stored, refused, why) {
+  if (refused) return `<div class="err">${label}: ${refused} of ${sent} not accepted (${why})</div>`;
+  if (stored) return `<div class="good">${label}: accepted</div>`;
+  return `<div class="muted">${label}: nothing new (the bot already had this or newer)</div>`;
+}
+
 async function refresh() {
   let st;
   try { st = await (await fetch("/status")).json(); } catch { return; }
@@ -184,6 +192,8 @@ async function refresh() {
       <div><strong>${esc(f.flavor)}</strong> · account ${esc(f.account)} · ${f.characters} characters, ${f.recipes} recipes</div>
       <div class="muted">Addon Discord ID: ${esc(f.discordId || "not set (use /guildlink in game)")}</div>
       <div class="muted">${synced ? "Last upload " + esc(synced) + (r ? `: ${r.accepted} characters, ${r.recipesStored} recipes stored` : "") : "Not uploaded yet"}</div>
+      ${r && f.rosters ? guildLine("Guild roster", f.rosters, r.rostersStored, r.rostersUnverified, "your character isn't on that roster") : ""}
+      ${r && f.banks ? guildLine("Guild bank", f.banks, r.banksStored, r.banksUnverified, "you have no character in that guild") : ""}
       ${f.lastError ? `<div class="err">${esc(f.lastError)}</div>` : ""}${rejected}
       <div class="path">${esc(f.path)}</div>
     </div>`;

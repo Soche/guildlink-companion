@@ -41,6 +41,12 @@ type SyncResult struct {
 	} `json:"rejected"`
 	RecipesStored    int `json:"recipesStored"`
 	InstancesUpdated int `json:"instancesUpdated"`
+	// Guild rosters and banks the bot kept, and ones it refused because the
+	// uploader isn't verifiably in that guild.
+	RostersStored     int `json:"rostersStored"`
+	RostersUnverified int `json:"rostersUnverified"`
+	BanksStored       int `json:"banksStored"`
+	BanksUnverified   int `json:"banksUnverified"`
 }
 
 // Error is a non-2xx answer; Message is the server's explanation when it gave one.

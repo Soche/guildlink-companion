@@ -29,6 +29,8 @@ type FileStatus struct {
 	wow.SavedVariables
 	Characters  int             `json:"characters"`
 	Recipes     int             `json:"recipes"`
+	Rosters     int             `json:"rosters"` // guild rosters in the file
+	Banks       int             `json:"banks"`   // guild bank snapshots in the file
 	DiscordID   string          `json:"discordId"`
 	LastSync    time.Time       `json:"lastSync"`
 	LastError   string          `json:"lastError"`
@@ -202,6 +204,8 @@ func (s *Syncer) upload(ctx context.Context, settings config.Settings, f *FileSt
 	s.update(f, func() {
 		f.Characters = len(payload.Characters)
 		f.Recipes = recipes
+		f.Rosters = len(payload.GuildRosters)
+		f.Banks = len(payload.GuildBanks)
 		f.DiscordID = ""
 		if payload.DiscordID != nil {
 			f.DiscordID = *payload.DiscordID
