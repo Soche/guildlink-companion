@@ -94,3 +94,15 @@ func TestGuildBanks(t *testing.T) {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 }
+
+func TestGuildBankWithoutTabs(t *testing.T) {
+	vars, err := luasv.Parse(`GuildLinkDB = { ["guildBanks"] = { ["Nobility"] = {
+		["guild"] = "Nobility", ["scannedAt"] = 5000, ["money"] = 5000000, ["numTabs"] = 0, ["tabs"] = {} } } }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := FromSavedVariables(vars)
+	if len(p.GuildBanks) != 1 || *p.GuildBanks[0].Money != 5000000 || len(p.GuildBanks[0].Tabs) != 0 {
+		t.Errorf("bank with gold but no tabs not uploaded: %+v", p.GuildBanks)
+	}
+}
