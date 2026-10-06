@@ -159,12 +159,23 @@ document.getElementById("testBtn").addEventListener("click", async () => {
   out.innerHTML = `<span class="good">Connected as Discord user ${esc(res.discordUserId)}.</span> Characters on the server: ${esc(chars)}.`;
 });
 
-// "Guild bank: accepted" / "not accepted (...)". Stored and refused counts
-// come from the bot; anything else was older than what it already had.
-function guildLine(label, sent, stored, refused, why) {
-  if (refused) return `<div class="err">${label}: ${refused} of ${sent} not accepted (${why})</div>`;
-  if (stored) return `<div class="good">${label}: accepted</div>`;
-  return `<div class="muted">${label}: nothing new (the bot already had this or newer)</div>`;
+// Result lines for the rosters or banks in an upload. Data from a guild none
+// of your characters is in is only a note; red means something to fix.
+function guildLines(kind, label, sent, stored, refusedCount, refused) {
+  const out = [];
+  const mine = (refused || []).filter((x) => x.kind === kind);
+  if (stored) out.push(`<div class="good">${label}: accepted</div>`);
+  for (const x of mine) {
+    if (x.reason === "not-member") {
+      out.push(`<div class="muted">${label} of &lt;${esc(x.guild)}&gt; not used: none of your characters is in that guild now.</div>`);
+    } else {
+      out.push(`<div class="err">${label} of &lt;${esc(x.guild)}&gt; refused: your character in that guild isn't on its roster. Please report this.</div>`);
+    }
+  }
+  // Older bots only send counts.
+  if (!refused && refusedCount) out.push(`<div class="err">${label}: ${refusedCount} of ${sent} not accepted</div>`);
+  if (!out.length) out.push(`<div class="muted">${label}: nothing new (the bot already had this or newer)</div>`);
+  return out.join("");
 }
 
 async function refresh() {
@@ -192,8 +203,8 @@ async function refresh() {
       <div><strong>${esc(f.flavor)}</strong> · account ${esc(f.account)} · ${f.characters} characters, ${f.recipes} recipes</div>
       <div class="muted">Addon Discord ID: ${esc(f.discordId || "not set (use /guildlink in game)")}</div>
       <div class="muted">${synced ? "Last upload " + esc(synced) + (r ? `: ${r.accepted} characters, ${r.recipesStored} recipes stored` : "") : "Not uploaded yet"}</div>
-      ${r && f.rosters ? guildLine("Guild roster", f.rosters, r.rostersStored, r.rostersUnverified, "your character isn't on that roster") : ""}
-      ${r && f.banks ? guildLine("Guild bank", f.banks, r.banksStored, r.banksUnverified, "you have no character in that guild") : ""}
+      ${r && f.rosters ? guildLines("roster", "Guild roster", f.rosters, r.rostersStored, r.rostersUnverified, r.refused) : ""}
+      ${r && f.banks ? guildLines("bank", "Guild bank", f.banks, r.banksStored, r.banksUnverified, r.refused) : ""}
       ${f.lastError ? `<div class="err">${esc(f.lastError)}</div>` : ""}${rejected}
       <div class="path">${esc(f.path)}</div>
     </div>`;

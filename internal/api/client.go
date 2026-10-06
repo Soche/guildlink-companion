@@ -47,6 +47,14 @@ type SyncResult struct {
 	RostersUnverified int `json:"rostersUnverified"`
 	BanksStored       int `json:"banksStored"`
 	BanksUnverified   int `json:"banksUnverified"`
+	// Which guild's roster or bank was refused, and why: "not-member" (none of
+	// the uploader's characters is in it) or "not-listed" (theirs isn't on
+	// its roster). Older bots don't send it.
+	Refused []struct {
+		Kind   string `json:"kind"`
+		Guild  string `json:"guild"`
+		Reason string `json:"reason"`
+	} `json:"refused"`
 }
 
 // Error is a non-2xx answer; Message is the server's explanation when it gave one.
