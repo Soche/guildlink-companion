@@ -307,7 +307,9 @@ func banksOf(db luasv.Table) []GuildBank {
 			b.Tabs = append(b.Tabs, tab)
 		}
 		sort.Slice(b.Tabs, func(i, j int) bool { return b.Tabs[i].Index < b.Tabs[j].Index })
-		b.Access = append(accessOf(bt, "observed"), accessOf(bt, "permissions")...)
+		// "permissions" (addon 0.7.0/0.7.1) is ignored: it came from a blocked
+		// rank switch and may hold one rank's view for every rank.
+		b.Access = append(accessOf(bt, "observed"), accessOf(bt, "settings")...)
 		out = append(out, b)
 	}
 	return out
@@ -350,33 +352,24 @@ func rostersOf(db luasv.Table) []GuildRoster {
 	return out
 }
 
-// accessOf flattens the addon's per-rank tab views. "observed" is keyed
-// rank -> {at, tabs}; "permissions" is {at, ranks: rank -> tabs}.
+// accessOf flattens the addon's per-rank tab views, keyed rank -> {at,
+// tabs}: "observed" (seen at the vault) or "settings" (read from Guild
+// Control while the Guild Master browsed ranks).
 func accessOf(bank luasv.Table, key string) []TabAccess {
 	out := []TabAccess{}
-	src, ok := bank.Table(key)
+	ranks, ok := bank.Table(key)
 	if !ok {
 		return out
 	}
-	source := "observed"
-	ranks := src
-	sharedAt, _ := src.Int("at")
-	if key == "permissions" {
-		source = "settings"
-		ranks, _ = src.Table("ranks")
-	}
+	source := key
 	for _, rk := range sortedKeys(ranks) {
 		rank, err := strconv.ParseInt(rk, 10, 64)
 		entry, ok := ranks.Table(rk)
 		if err != nil || !ok {
 			continue
 		}
-		at := sharedAt
-		tabs := entry
-		if source == "observed" {
-			at, _ = entry.Int("at")
-			tabs, _ = entry.Table("tabs")
-		}
+		at, _ := entry.Int("at")
+		tabs, _ := entry.Table("tabs")
 		for _, tk := range sortedKeys(tabs) {
 			tab, err := strconv.ParseInt(tk, 10, 64)
 			canView, isBool := tabs[tk].(bool)

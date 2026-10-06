@@ -79,7 +79,8 @@ func TestGuildBanks(t *testing.T) {
 			[1] = { ["name"] = "Mats", ["scannedAt"] = 898, ["items"] = {} },
 		},
 		["observed"] = { [2] = { ["at"] = 897, ["tabs"] = { [1] = true, [3] = false } } },
-		["permissions"] = { ["at"] = 890, ["ranks"] = { [0] = { [1] = true }, [1] = { [3] = false } } },
+		["settings"] = { [0] = { ["at"] = 890, ["tabs"] = { [1] = true } }, [1] = { ["at"] = 890, ["tabs"] = { [3] = false } } },
+		["permissions"] = { ["at"] = 880, ["ranks"] = { [2] = { [3] = true } } },
 	} } }`)
 	if err != nil {
 		t.Fatal(err)
