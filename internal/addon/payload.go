@@ -79,6 +79,21 @@ type Character struct {
 	GuildRankIndex *int64       `json:"guildRankIndex"` // 0 = Guild Master
 	UpdatedAt      *int64       `json:"updatedAt"`
 	Professions    []Profession `json:"professions"`
+	// Items per place: "bags", "bank", "equipped" (addon 0.8.0+).
+	Inventory map[string]*Container `json:"inventory,omitempty"`
+}
+
+// Container is the items in one place, stacks added up, as of ScannedAt.
+type Container struct {
+	ScannedAt int64        `json:"scannedAt"`
+	Items     []StoredItem `json:"items"`
+}
+
+type StoredItem struct {
+	ItemID  int64   `json:"itemId"`
+	Name    *string `json:"name"`
+	Count   int64   `json:"count"`
+	Quality *int64  `json:"quality"`
 }
 
 // Instance is a dungeon or raid a character has been inside.
@@ -98,6 +113,14 @@ type Payload struct {
 	GuildRosters []GuildRoster `json:"guildRosters"`
 	// Guild bank tabs the account's characters saw at the vault (addon 0.7.0+).
 	GuildBanks []GuildBank `json:"guildBanks"`
+	// An account-wide bank, if the client has one. AccountKey is set by the
+	// syncer (a hash of the WTF account folder) to tell accounts apart.
+	AccountBank *AccountBank `json:"accountBank,omitempty"`
+}
+
+type AccountBank struct {
+	AccountKey string `json:"accountKey"`
+	Container
 }
 
 type GuildBank struct {
@@ -243,6 +266,14 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 			}
 			c.Professions = append(c.Professions, prof)
 		}
+		if inv, ok := ct.Table("inventory"); ok {
+			c.Inventory = map[string]*Container{}
+			for _, place := range []string{"bags", "bank", "equipped"} {
+				if box := containerOf(inv, place); box != nil {
+					c.Inventory[place] = box
+				}
+			}
+		}
 		p.Characters = append(p.Characters, c)
 	}
 
@@ -263,7 +294,37 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 	}
 	p.GuildRosters = rostersOf(db)
 	p.GuildBanks = banksOf(db)
+	if box := containerOf(db, "accountBank"); box != nil {
+		p.AccountBank = &AccountBank{Container: *box}
+	}
 	return p, nil
+}
+
+// containerOf reads { scannedAt, items = { [itemID] = { name, count, quality } } }.
+func containerOf(parent luasv.Table, key string) *Container {
+	t, ok := parent.Table(key)
+	if !ok {
+		return nil
+	}
+	scanned, ok := t.Int("scannedAt")
+	if !ok {
+		return nil
+	}
+	box := &Container{ScannedAt: scanned, Items: []StoredItem{}}
+	items, _ := t.Table("items")
+	for _, k := range sortedKeys(items) {
+		it, ok := items.Table(k)
+		id, err := strconv.ParseInt(k, 10, 64)
+		if !ok || err != nil || id <= 0 {
+			continue
+		}
+		count, ok := it.Int("count")
+		if !ok || count < 1 {
+			count = 1
+		}
+		box.Items = append(box.Items, StoredItem{ItemID: id, Name: str(it, "name"), Count: count, Quality: num(it, "quality")})
+	}
+	return box
 }
 
 func banksOf(db luasv.Table) []GuildBank {

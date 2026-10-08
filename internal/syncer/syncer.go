@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -194,6 +195,11 @@ func (s *Syncer) upload(ctx context.Context, settings config.Settings, f *FileSt
 	if err != nil {
 		s.update(f, func() { f.LastError = err.Error() })
 		return
+	}
+	if payload.AccountBank != nil {
+		// Identifies the WoW account without sending its folder name.
+		sum := sha256.Sum256([]byte(strings.ToLower(f.Account)))
+		payload.AccountBank.AccountKey = hex.EncodeToString(sum[:8])
 	}
 	recipes := 0
 	for _, c := range payload.Characters {

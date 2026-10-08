@@ -107,3 +107,25 @@ func TestGuildBankWithoutTabs(t *testing.T) {
 		t.Errorf("bank with gold but no tabs not uploaded: %+v", p.GuildBanks)
 	}
 }
+
+func TestInventory(t *testing.T) {
+	vars, err := luasv.Parse(`GuildLinkDB = {
+		["characters"] = { ["X"] = { ["name"] = "Soche Lightbringer", ["inventory"] = {
+			["bags"] = { ["scannedAt"] = 10, ["items"] = { [2840] = { ["name"] = "Copper Bar", ["count"] = 25, ["quality"] = 1 } } },
+			["bank"] = { ["scannedAt"] = 9, ["items"] = {} },
+		} } },
+		["accountBank"] = { ["scannedAt"] = 8, ["items"] = { [4306] = { ["name"] = "Silk Cloth", ["count"] = 10 } } },
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := FromSavedVariables(vars)
+	got, _ := json.Marshal(struct {
+		Inv  map[string]*Container
+		Acct *AccountBank
+	}{p.Characters[0].Inventory, p.AccountBank})
+	want := `{"Inv":{"bags":{"scannedAt":10,"items":[{"itemId":2840,"name":"Copper Bar","count":25,"quality":1}]},"bank":{"scannedAt":9,"items":[]}},"Acct":{"accountKey":"","scannedAt":8,"items":[{"itemId":4306,"name":"Silk Cloth","count":10,"quality":null}]}}`
+	if string(got) != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
