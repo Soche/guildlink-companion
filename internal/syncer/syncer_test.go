@@ -98,3 +98,50 @@ func TestUploadsChangedFilesAndWritesSeed(t *testing.T) {
 		t.Errorf("expected the server's error to be reported, got %+v", st.Files)
 	}
 }
+
+func TestRetiredBetaIsNotUploadedAndCarriesDiscordID(t *testing.T) {
+	root := t.TempDir()
+	betaSV := filepath.Join(root, "_classic_beta_", "WTF", "Account", "ACCOUNT1", "SavedVariables")
+	launchAddon := filepath.Join(root, "_forever_", "Interface", "AddOns", "GuildLink")
+	for _, d := range []string{betaSV, launchAddon} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	withID := strings.Replace(sv, `["schema"] = 1,`, `["schema"] = 1, ["discordId"] = "123456789012345678",`, 1)
+	if err := os.WriteFile(filepath.Join(betaSV, "GuildLink.lua"), []byte(withID), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	seedPath := filepath.Join(launchAddon, "Seed.lua")
+	if err := os.WriteFile(seedPath, nil, 0o644); err != nil { // as shipped
+		t.Fatal(err)
+	}
+
+	var uploads atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uploads.Add(1)
+		_, _ = w.Write([]byte(`{"ok":true,"accepted":1}`))
+	}))
+	defer srv.Close()
+	store, _ := config.Load(filepath.Join(t.TempDir(), "config.json"))
+	if err := store.Save(config.Settings{ServerURL: srv.URL + "/", Token: "glk_test", WowDir: root, WriteSeed: true}); err != nil {
+		t.Fatal(err)
+	}
+	s := New(store, "test")
+	s.check(context.Background(), true)
+
+	if uploads.Load() != 0 {
+		t.Errorf("retired beta data uploaded")
+	}
+	seed, _ := os.ReadFile(seedPath)
+	if !strings.Contains(string(seed), `GuildLinkDB = { discordId = "123456789012345678" }`) || strings.Contains(string(seed), "Thrall") {
+		t.Errorf("Seed.lua = %q, want only the Discord ID", seed)
+	}
+
+	// Once the release client has a seed of its own, it's left alone.
+	_ = os.WriteFile(seedPath, []byte("GuildLinkDB = {}\n"), 0o644)
+	s.check(context.Background(), true)
+	if seed, _ := os.ReadFile(seedPath); string(seed) != "GuildLinkDB = {}\n" {
+		t.Errorf("Seed.lua overwritten: %q", seed)
+	}
+}

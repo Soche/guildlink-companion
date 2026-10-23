@@ -85,7 +85,7 @@
       <div class="hint">Run <code>/link</code> in your Discord server to get both.</div>
 
       <label for="wowDir">World of Warcraft folder</label>
-      <input type="text" id="wowDir" name="wowDir" value="{{.Settings.WowDir}}" placeholder="The folder that contains _classic_beta_, _retail_ …">
+      <input type="text" id="wowDir" name="wowDir" value="{{.Settings.WowDir}}" placeholder="The folder that contains _forever_, _retail_ …">
       {{if .Detected}}
       <div class="chips">{{range .Detected}}<button type="button" class="pick" data-dir="{{.}}">{{.}}</button>{{end}}</div>
       {{else}}
@@ -93,7 +93,7 @@
       {{end}}
 
       <label class="check"><input type="checkbox" name="writeSeed" {{if .Settings.WriteSeed}}checked{{end}}>
-        <span>Keep addon data between sessions<br><span class="hint">Copies your saved data into the addon's Seed.lua, because the Forever beta client doesn't load it back at startup.</span></span></label>
+        <span>Keep addon data between sessions<br><span class="hint">Copies your saved data into the addon's Seed.lua, because the Forever client didn't load it back at startup during the beta.</span></span></label>
       <label class="check"><input type="checkbox" name="openOnLaunch" {{if .Settings.OpenOnLaunch}}checked{{end}}>
         <span>Open this page when the companion starts</span></label>
       <label class="check"><input type="checkbox" name="autoUpdate" {{if .AutoUpdate}}checked{{end}}>

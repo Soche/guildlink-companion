@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -70,7 +72,7 @@ func DetectInstalls() []string {
 // SavedVariables is one GuildLink.lua file, for one WoW account in one game flavor.
 type SavedVariables struct {
 	Path    string    `json:"path"`
-	Flavor  string    `json:"flavor"`  // e.g. "_classic_beta_"
+	Flavor  string    `json:"flavor"`  // e.g. "_forever_"
 	Account string    `json:"account"` // WTF account folder name
 	ModTime time.Time `json:"modTime"`
 	Size    int64     `json:"size"`
@@ -79,7 +81,7 @@ type SavedVariables struct {
 }
 
 // FindSavedVariables lists GuildLink SavedVariables files under every game
-// flavor (_retail_, _classic_beta_, ...) of an install.
+// flavor (_retail_, _forever_, ...) of an install, a retired beta's included.
 func FindSavedVariables(installDir string) ([]SavedVariables, error) {
 	matches, err := filepath.Glob(filepath.Join(installDir, "*", "WTF", "Account", "*", "SavedVariables", svName))
 	if err != nil {
@@ -113,8 +115,9 @@ func (sv SavedVariables) AddonInstalled() bool {
 }
 
 // WriteSeed copies the saved data into the addon's Seed.lua so the next
-// session starts with it. The Forever beta client writes SavedVariables on
-// logout but never loads them, and Seed.lua runs as addon code instead.
+// session starts with it. The Forever client (at least during the beta)
+// writes SavedVariables on logout but never loads them, and Seed.lua runs as
+// addon code instead.
 // Returns whether the file changed.
 func (sv SavedVariables) WriteSeed(content []byte) (bool, error) {
 	if !sv.AddonInstalled() {
@@ -133,8 +136,59 @@ func (sv SavedVariables) WriteSeed(content []byte) (bool, error) {
 	return true, os.Rename(tmp, path)
 }
 
+// The Forever release client's folder, and the beta's.
+const (
+	ForeverFlavor = "_forever_"
+	BetaFlavor    = "_classic_beta_"
+)
+
+// Retired reports whether a flavor folder is the ended Forever beta: the
+// beta's folder once the release client is installed next to it. Its data
+// isn't uploaded and the addon isn't kept updated there.
+func Retired(installDir, flavor string) bool {
+	if flavor != BetaFlavor {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(installDir, ForeverFlavor))
+	return err == nil && info.IsDir()
+}
+
+// NeedsSeed reports whether a flavor has the addon installed but neither
+// saved data nor a filled-in Seed.lua yet (the addon ships an empty one).
+func NeedsSeed(installDir, flavor string) bool {
+	addonDir := filepath.Join(AddOnsDir(installDir, flavor), AddonName)
+	if info, err := os.Stat(addonDir); err != nil || !info.IsDir() {
+		return false
+	}
+	if seed, err := os.ReadFile(filepath.Join(addonDir, seedName)); err == nil && len(bytes.TrimSpace(seed)) > 0 {
+		return false
+	}
+	saved, _ := filepath.Glob(filepath.Join(installDir, flavor, "WTF", "Account", "*", "SavedVariables", svName))
+	return len(saved) == 0
+}
+
+var discordIDPattern = regexp.MustCompile(`^[0-9]{17,20}$`)
+
+// SeedDiscordID starts a flavor's addon data with just a Discord user ID,
+// so you don't have to enter it again in a new game client. Only done while
+// the flavor has no saved data and no Seed.lua of its own. Returns whether
+// it wrote the file.
+func SeedDiscordID(installDir, flavor, discordID string) (bool, error) {
+	if !discordIDPattern.MatchString(discordID) || !NeedsSeed(installDir, flavor) {
+		return false, nil
+	}
+	path := filepath.Join(AddOnsDir(installDir, flavor), AddonName, seedName)
+	data := "-- Written by the GuildLink companion app: your Discord ID, carried over from another game client. Do not edit.\n" +
+		"GuildLinkDB = { discordId = \"" + discordID + "\" }\n"
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(data), 0o644); err != nil {
+		return false, err
+	}
+	return true, os.Rename(tmp, path)
+}
+
 // Flavors lists the game flavor folders of an install (_retail_,
-// _classic_beta_, ...).
+// _forever_, ...), leaving out a retired beta folder.
 func Flavors(installDir string) []string {
 	entries, err := os.ReadDir(installDir)
 	if err != nil {
@@ -143,7 +197,7 @@ func Flavors(installDir string) []string {
 	var out []string
 	for _, e := range entries {
 		n := e.Name()
-		if e.IsDir() && len(n) > 2 && strings.HasPrefix(n, "_") && strings.HasSuffix(n, "_") {
+		if e.IsDir() && len(n) > 2 && strings.HasPrefix(n, "_") && strings.HasSuffix(n, "_") && !Retired(installDir, n) {
 			out = append(out, n)
 		}
 	}
@@ -157,7 +211,8 @@ func AddOnsDir(installDir, flavor string) string {
 
 // DefaultAddonFlavors picks which flavors get the addon when the user hasn't
 // chosen: ones that already have it, else Forever-looking ones (the addon
-// only loads in the Forever client), else the only flavor installed.
+// only loads in the Forever client), else the only flavor installed. The
+// Forever release client always gets it once installed.
 func DefaultAddonFlavors(installDir string) []string {
 	flavors := Flavors(installDir)
 	var have, forever []string
@@ -171,6 +226,9 @@ func DefaultAddonFlavors(installDir string) []string {
 	}
 	switch {
 	case len(have) > 0:
+		if !slices.Contains(have, ForeverFlavor) && slices.Contains(flavors, ForeverFlavor) {
+			have = append(have, ForeverFlavor)
+		}
 		return have
 	case len(forever) > 0:
 		return forever

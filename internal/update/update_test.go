@@ -228,3 +228,16 @@ func TestUpdaterRefusesTamperedDownloads(t *testing.T) {
 		t.Errorf("status %+v", st)
 	}
 }
+
+func TestTargetFlavorsSwapsRetiredBeta(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"_classic_beta_", "_forever_"} {
+		if err := os.MkdirAll(filepath.Join(root, f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := TargetFlavors(config.Settings{WowDir: root, AddonFlavors: []string{"_classic_beta_", "_forever_"}})
+	if len(got) != 1 || got[0] != "_forever_" {
+		t.Errorf("TargetFlavors = %v, want [_forever_]", got)
+	}
+}

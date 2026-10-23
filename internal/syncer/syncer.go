@@ -128,6 +128,18 @@ func (s *Syncer) check(ctx context.Context, force bool) {
 		s.setProblem("")
 	}
 
+	// A retired beta's data isn't uploaded, but its Discord ID can start the
+	// release client's addon data.
+	var active []wow.SavedVariables
+	for _, sv := range found {
+		if !wow.Retired(settings.WowDir, sv.Flavor) {
+			active = append(active, sv)
+		} else if settings.WriteSeed {
+			s.carryDiscordID(settings.WowDir, sv)
+		}
+	}
+	found = active
+
 	s.mu.Lock()
 	current := map[string]*FileStatus{}
 	for _, sv := range found {
@@ -167,6 +179,31 @@ func (s *Syncer) check(ctx context.Context, force bool) {
 			}
 		}
 		s.upload(ctx, settings, f, content, force)
+	}
+}
+
+// carryDiscordID seeds the Forever release client's addon with the Discord
+// ID from a retired beta's saved data, until that client has data of its own.
+func (s *Syncer) carryDiscordID(installDir string, sv wow.SavedVariables) {
+	if !wow.NeedsSeed(installDir, wow.ForeverFlavor) {
+		return
+	}
+	content, err := os.ReadFile(sv.Path)
+	if err != nil {
+		return
+	}
+	vars, err := luasv.Parse(string(content))
+	if err != nil {
+		return
+	}
+	payload, err := addon.FromSavedVariables(vars)
+	if err != nil || payload.DiscordID == nil {
+		return
+	}
+	if wrote, err := wow.SeedDiscordID(installDir, wow.ForeverFlavor, *payload.DiscordID); err != nil {
+		log.Printf("carrying the Discord ID over to %s: %v", wow.ForeverFlavor, err)
+	} else if wrote {
+		log.Printf("carried the Discord ID over from %s to %s", sv.Flavor, wow.ForeverFlavor)
 	}
 }
 

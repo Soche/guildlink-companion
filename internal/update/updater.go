@@ -3,6 +3,7 @@ package update
 import (
 	"context"
 	"log"
+	"slices"
 	"sync"
 	"time"
 
@@ -106,15 +107,25 @@ func (u *Updater) set(fn func(s *Status)) {
 }
 
 // TargetFlavors is where the addon is kept installed: the user's choice, or
-// a sensible default.
+// a sensible default. A chosen beta folder that has been retired is swapped
+// for the Forever release client's.
 func TargetFlavors(s config.Settings) []string {
 	if s.WowDir == "" {
 		return nil
 	}
-	if len(s.AddonFlavors) > 0 {
-		return s.AddonFlavors
+	if len(s.AddonFlavors) == 0 {
+		return wow.DefaultAddonFlavors(s.WowDir)
 	}
-	return wow.DefaultAddonFlavors(s.WowDir)
+	var out []string
+	for _, f := range s.AddonFlavors {
+		if wow.Retired(s.WowDir, f) {
+			f = wow.ForeverFlavor
+		}
+		if !slices.Contains(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func (u *Updater) check(ctx context.Context, apply bool) {
