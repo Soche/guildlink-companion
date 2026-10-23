@@ -45,8 +45,9 @@ func candidateDirs() []string {
 }
 
 // wineDirs is where WoW may be on Linux: Wine prefixes from Lutris, plain
-// Wine, Heroic, Steam/Proton and Bottles. WoW is usually under Program Files
-// (x86), but any folder directly in drive_c or one below it is checked.
+// Wine, Heroic, Steam/Proton and Bottles, with or without Proton's pfx
+// folder. WoW is usually under Program Files (x86), but any folder directly
+// in drive_c or one below it is checked.
 func wineDirs(home string) []string {
 	prefixes := []string{
 		filepath.Join(home, "Games", "world-of-warcraft"),
@@ -62,11 +63,15 @@ func wineDirs(home string) []string {
 	prefixes = append(prefixes, heroicPrefixes(home)...)
 	var dirs []string
 	for _, prefix := range prefixes {
-		dirs = append(dirs,
-			filepath.Join(prefix, "drive_c", "World of Warcraft"),
-			filepath.Join(prefix, "drive_c", "*", "World of Warcraft"),
-			filepath.Join(prefix, "drive_c", "*", "*", "World of Warcraft"),
-		)
+		// Proton (as Heroic and Steam use it) keeps the Wine prefix in pfx.
+		for _, root := range []string{prefix, filepath.Join(prefix, "pfx")} {
+			driveC := filepath.Join(root, "drive_[cC]")
+			dirs = append(dirs,
+				filepath.Join(driveC, "World of Warcraft"),
+				filepath.Join(driveC, "*", "World of Warcraft"),
+				filepath.Join(driveC, "*", "*", "World of Warcraft"),
+			)
+		}
 	}
 	return dirs
 }

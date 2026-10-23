@@ -89,8 +89,8 @@ func TestHeroicPrefixesFromSettings(t *testing.T) {
 
 func TestDetectsHeroicBattleNetPrefix(t *testing.T) {
 	home := t.TempDir()
-	wow := filepath.Join(home, "Games", "Heroic", "Prefixes", "default", "Battle.net", "drive_c", "Program Files (x86)", "World of Warcraft")
-	elsewhere := filepath.Join(home, "wine", "bnet", "drive_c", "Games", "World of Warcraft")
+	wow := filepath.Join(home, "Games", "Heroic", "Prefixes", "default", "Battle.net", "pfx", "drive_c", "Program Files (x86)", "World of Warcraft")
+	elsewhere := filepath.Join(home, "wine", "bnet", "drive_C", "Games", "World of Warcraft")
 	mkdirs(t, filepath.Join(wow, "_forever_"), elsewhere, filepath.Join(home, ".config", "heroic", "GamesConfig"))
 	settings := `{"bnet": {"winePrefix": "` + filepath.Join(home, "wine", "bnet") + `"}}`
 	if err := os.WriteFile(filepath.Join(home, ".config", "heroic", "GamesConfig", "bnet.json"), []byte(settings), 0o644); err != nil {
