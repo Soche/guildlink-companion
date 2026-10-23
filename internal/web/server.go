@@ -155,7 +155,7 @@ func (w *Server) saveSettings(rw http.ResponseWriter, r *http.Request) {
 	if t := r.FormValue("token"); t != "" {
 		s.Token = t
 	}
-	s.WowDir = r.FormValue("wowDir")
+	s.WowDir = wow.ExpandPath(r.FormValue("wowDir"))
 	s.WriteSeed = r.FormValue("writeSeed") == "on"
 	s.OpenOnLaunch = r.FormValue("openOnLaunch") == "on"
 	s.DisableAutoUpdate = r.FormValue("autoUpdate") != "on"

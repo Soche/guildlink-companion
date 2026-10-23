@@ -3,6 +3,7 @@ package wow
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,25 +40,108 @@ func candidateDirs() []string {
 	case "darwin":
 		return []string{"/Applications/World of Warcraft", filepath.Join(home, "Applications", "World of Warcraft")}
 	default:
-		// Wine prefixes from Lutris, plain Wine, Steam/Proton and Bottles.
-		inPrefix := func(prefix string) string { return filepath.Join(prefix, "drive_c", x86, "World of Warcraft") }
-		return []string{
-			inPrefix(filepath.Join(home, "Games", "world-of-warcraft")),
-			inPrefix(filepath.Join(home, "Games", "battlenet")),
-			inPrefix(filepath.Join(home, "Games", "*")),
-			inPrefix(filepath.Join(home, ".wine")),
-			inPrefix(filepath.Join(home, ".local/share/Steam/steamapps/compatdata/*/pfx")),
-			inPrefix(filepath.Join(home, ".local/share/bottles/bottles/*")),
-			inPrefix(filepath.Join(home, ".var/app/com.usebottles.bottles/data/bottles/bottles/*")),
+		return wineDirs(home)
+	}
+}
+
+// wineDirs is where WoW may be on Linux: Wine prefixes from Lutris, plain
+// Wine, Heroic, Steam/Proton and Bottles. WoW is usually under Program Files
+// (x86), but any folder directly in drive_c or one below it is checked.
+func wineDirs(home string) []string {
+	prefixes := []string{
+		filepath.Join(home, "Games", "world-of-warcraft"),
+		filepath.Join(home, "Games", "battlenet"),
+		filepath.Join(home, "Games", "*"),
+		filepath.Join(home, "Games", "Heroic", "Prefixes", "*"),
+		filepath.Join(home, "Games", "Heroic", "Prefixes", "default", "*"),
+		filepath.Join(home, ".wine"),
+		filepath.Join(home, ".local/share/Steam/steamapps/compatdata/*/pfx"),
+		filepath.Join(home, ".local/share/bottles/bottles/*"),
+		filepath.Join(home, ".var/app/com.usebottles.bottles/data/bottles/bottles/*"),
+	}
+	prefixes = append(prefixes, heroicPrefixes(home)...)
+	var dirs []string
+	for _, prefix := range prefixes {
+		dirs = append(dirs,
+			filepath.Join(prefix, "drive_c", "World of Warcraft"),
+			filepath.Join(prefix, "drive_c", "*", "World of Warcraft"),
+			filepath.Join(prefix, "drive_c", "*", "*", "World of Warcraft"),
+		)
+	}
+	return dirs
+}
+
+// heroicPrefixes reads the Wine prefixes Heroic Games Launcher has set up,
+// native and Flatpak, from its settings: each "winePrefix" in them.
+func heroicPrefixes(home string) []string {
+	var files []string
+	for _, base := range []string{
+		filepath.Join(home, ".config", "heroic"),
+		filepath.Join(home, ".var", "app", "com.heroicgameslauncher.hgl", "config", "heroic"),
+	} {
+		files = append(files, filepath.Join(base, "config.json"))
+		more, _ := filepath.Glob(filepath.Join(base, "GamesConfig", "*.json"))
+		files = append(files, more...)
+	}
+	var out []string
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		var v any
+		if json.Unmarshal(data, &v) != nil {
+			continue
+		}
+		collectWinePrefixes(v, &out)
+	}
+	return out
+}
+
+func collectWinePrefixes(v any, out *[]string) {
+	switch v := v.(type) {
+	case map[string]any:
+		for k, x := range v {
+			if p, ok := x.(string); ok && k == "winePrefix" && p != "" {
+				p = ExpandPath(p)
+				// The default prefix folder holds one prefix per game.
+				*out = append(*out, p, filepath.Join(p, "*"))
+			} else {
+				collectWinePrefixes(x, out)
+			}
+		}
+	case []any:
+		for _, x := range v {
+			collectWinePrefixes(x, out)
 		}
 	}
 }
 
+// ExpandPath tidies a folder path someone typed or pasted: surrounding
+// quotes and spaces are dropped, and a leading ~ means the home folder.
+func ExpandPath(p string) string {
+	p = strings.TrimSpace(p)
+	if len(p) >= 2 && (p[0] == '"' || p[0] == '\'') && p[len(p)-1] == p[0] {
+		p = strings.TrimSpace(p[1 : len(p)-1])
+	}
+	if p == "~" || strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil {
+			p = filepath.Join(home, p[1:])
+		}
+	}
+	if p != "" {
+		p = filepath.Clean(p)
+	}
+	return p
+}
+
 // DetectInstalls returns existing WoW install folders in the usual places.
-func DetectInstalls() []string {
+func DetectInstalls() []string { return detectIn(candidateDirs()) }
+
+func detectIn(patterns []string) []string {
 	seen := map[string]bool{}
 	var found []string
-	for _, pattern := range candidateDirs() {
+	for _, pattern := range patterns {
 		matches, _ := filepath.Glob(pattern)
 		for _, m := range matches {
 			if info, err := os.Stat(m); err == nil && info.IsDir() && !seen[m] {

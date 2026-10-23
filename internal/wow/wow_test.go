@@ -56,3 +56,48 @@ func TestSeedDiscordIDRejectsBadIDs(t *testing.T) {
 		t.Errorf("valid ID: %v %v", wrote, err)
 	}
 }
+
+func TestExpandPath(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	for in, want := range map[string]string{
+		"~/Games/Heroic/":         filepath.Join(home, "Games", "Heroic"),
+		` "~/World of Warcraft" `: filepath.Join(home, "World of Warcraft"),
+		"~":                       home,
+		"/opt/wow/":               "/opt/wow",
+		"~other/wow":              "~other/wow",
+		"":                        "",
+	} {
+		if got := ExpandPath(in); got != want {
+			t.Errorf("ExpandPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestHeroicPrefixesFromSettings(t *testing.T) {
+	home := t.TempDir()
+	cfg := filepath.Join(home, ".var", "app", "com.heroicgameslauncher.hgl", "config", "heroic", "GamesConfig")
+	mkdirs(t, cfg)
+	game := `{"abc123": {"winePrefix": "/data/Prefixes/Battle.net", "wineVersion": {"bin": "/x"}}, "version": "v0"}`
+	if err := os.WriteFile(filepath.Join(cfg, "abc123.json"), []byte(game), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := heroicPrefixes(home)
+	if !slices.Contains(got, "/data/Prefixes/Battle.net") {
+		t.Errorf("heroicPrefixes = %v", got)
+	}
+}
+
+func TestDetectsHeroicBattleNetPrefix(t *testing.T) {
+	home := t.TempDir()
+	wow := filepath.Join(home, "Games", "Heroic", "Prefixes", "default", "Battle.net", "drive_c", "Program Files (x86)", "World of Warcraft")
+	elsewhere := filepath.Join(home, "wine", "bnet", "drive_c", "Games", "World of Warcraft")
+	mkdirs(t, filepath.Join(wow, "_forever_"), elsewhere, filepath.Join(home, ".config", "heroic", "GamesConfig"))
+	settings := `{"bnet": {"winePrefix": "` + filepath.Join(home, "wine", "bnet") + `"}}`
+	if err := os.WriteFile(filepath.Join(home, ".config", "heroic", "GamesConfig", "bnet.json"), []byte(settings), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := detectIn(wineDirs(home))
+	if !slices.Contains(got, wow) || !slices.Contains(got, elsewhere) {
+		t.Errorf("detected %v", got)
+	}
+}

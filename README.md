@@ -7,7 +7,7 @@ A small background app that watches the GuildLink addon's SavedVariables and upl
 This is the only thing members download: it installs the GuildLink addon and keeps both itself and the addon up to date.
 
 1. Run `/link` in Discord to get the server address and token.
-2. Start the companion. The settings page opens in your browser. Paste the address and token, pick your World of Warcraft folder (usual install locations are detected, including Lutris, Wine, Steam/Proton and Bottles prefixes on Linux), then **Save** and **Test connection**.
+2. Start the companion. The settings page opens in your browser. Paste the address and token, pick your World of Warcraft folder (usual install locations are detected, including Lutris, Heroic, Wine, Steam/Proton and Bottles prefixes on Linux; a typed path may start with `~`), then **Save** and **Test connection**.
 3. Play. The status page shows every account's saved data it found and the result of the last upload.
 
 It finds `GuildLink.lua` under every game flavor and account (`<WoW>/_*_/WTF/Account/*/SavedVariables/GuildLink.lua`) and uploads each one when it changes. If an upload fails, it retries a minute later.
