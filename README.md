@@ -8,7 +8,8 @@ This is the only thing members download: it installs the GuildLink addon and kee
 
 1. Run `/link` in Discord to get the server address and token.
 2. Start the companion. The settings page opens in your browser. Paste the address and token, pick your World of Warcraft folder (usual install locations are detected, including Lutris, Heroic, Wine, Steam/Proton and Bottles prefixes on Linux; a typed path may start with `~`), then **Save** and **Test connection**.
-3. Play. The status page shows every account's saved data it found and the result of the last upload.
+3. Tick **Start with my computer** so it runs whenever you log in (without opening the settings page).
+4. Play. The status page shows every account's saved data it found and the result of the last upload.
 
 It finds `GuildLink.lua` under every game flavor and account (`<WoW>/_*_/WTF/Account/*/SavedVariables/GuildLink.lua`) and uploads each one when it changes. If an upload fails, it retries a minute later.
 
@@ -22,6 +23,8 @@ A few seconds after starting, and then every six hours, the companion checks the
 - **Companion:** the new binary replaces the running one and the companion restarts itself; the page then says what it updated from. Development builds (`dev`) never update themselves.
 - Every download is checked against the release's `SHA256SUMS` before it is used; a mismatch is reported and nothing is installed.
 - Turn automatic updates off on the settings page to only be told about them, then use **Update now**.
+
+**Start with my computer** adds a per-user startup entry that runs the companion with `-no-browser`: a `GuildLink Companion` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` on Windows, `~/Library/LaunchAgents/top.lassi.guildlink.companion.plist` on macOS, and `~/.config/autostart/guildlink-companion.desktop` on Linux (XDG desktops such as GNOME and KDE). It points at the binary where it is; self-updates keep that path, and each start re-points the entry, so after moving the file just start it once from its new place. Unticking it removes the entry.
 
 Flags: `-headless` (no tray icon, stop with Ctrl+C), `-no-browser`, `-port <n>` (settings page port, default 47631), `-config <file>`, `-version`.
 

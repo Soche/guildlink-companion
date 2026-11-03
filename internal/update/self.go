@@ -17,6 +17,9 @@ func CompanionAssetName() string {
 	return fmt.Sprintf("guildlink-companion-%s-%s%s", runtime.GOOS, runtime.GOARCH, ext)
 }
 
+// ExecutablePath is the running binary, with symlinks resolved.
+func ExecutablePath() (string, error) { return executablePath() }
+
 func executablePath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {

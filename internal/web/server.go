@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"guildlink/companion/internal/api"
+	"guildlink/companion/internal/autostart"
 	"guildlink/companion/internal/config"
 	"guildlink/companion/internal/syncer"
 	"guildlink/companion/internal/update"
@@ -110,6 +111,10 @@ type pageData struct {
 	SaveError  string
 	AutoUpdate bool
 	Flavors    []flavorChoice
+	// Start at login: whether it's on, and whether this build can set it
+	// (a development build runs from a temporary folder).
+	StartAtLogin    bool
+	CanStartAtLogin bool
 }
 
 type flavorChoice struct {
@@ -132,10 +137,12 @@ func (w *Server) render(rw http.ResponseWriter, saved bool, saveErr string) {
 			flavors = append(flavors, flavorChoice{Name: f, Checked: targets[f]})
 		}
 	}
+	startAtLogin, _ := autostart.Enabled()
 	_ = page.Execute(rw, pageData{
 		Settings: s, TokenSet: token != "", CSRF: w.csrf, Version: w.version,
 		Detected: wow.DetectInstalls(), ConfigPath: w.store.Path(), Saved: saved, SaveError: saveErr,
 		AutoUpdate: !s.DisableAutoUpdate, Flavors: flavors,
+		StartAtLogin: startAtLogin, CanStartAtLogin: w.version != "dev",
 	})
 }
 
@@ -178,9 +185,26 @@ func (w *Server) saveSettings(rw http.ResponseWriter, r *http.Request) {
 		w.render(rw, false, "Could not save settings: "+err.Error())
 		return
 	}
+	if w.version != "dev" {
+		if err := setStartAtLogin(r.FormValue("startAtLogin") == "on"); err != nil {
+			w.render(rw, false, "Settings saved, but starting with your computer couldn't be changed: "+err.Error())
+			return
+		}
+	}
 	w.syncer.SyncNow()
 	w.updater.CheckNow(false)
 	http.Redirect(rw, r, "/?saved", http.StatusSeeOther)
+}
+
+func setStartAtLogin(on bool) error {
+	if !on {
+		return autostart.Disable()
+	}
+	exe, err := update.ExecutablePath()
+	if err != nil {
+		return err
+	}
+	return autostart.Enable(exe)
 }
 
 func (w *Server) syncNow(rw http.ResponseWriter, _ *http.Request) {

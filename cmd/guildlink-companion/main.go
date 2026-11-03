@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"guildlink/companion/internal/autostart"
 	"guildlink/companion/internal/config"
 	"guildlink/companion/internal/syncer"
 	"guildlink/companion/internal/update"
@@ -69,6 +70,14 @@ func main() {
 		log.Fatalf("loading settings from %s: %v", *cfgPath, err)
 	}
 	autodetectWowDir(store)
+	// Keep the start-at-login entry pointing here, in case the binary moved.
+	if version != "dev" {
+		if exe, err := update.ExecutablePath(); err == nil {
+			if err := autostart.Refresh(exe); err != nil {
+				log.Printf("updating the start-at-login entry: %v", err)
+			}
+		}
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

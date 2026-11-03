@@ -94,6 +94,10 @@
 
       <label class="check"><input type="checkbox" name="writeSeed" {{if .Settings.WriteSeed}}checked{{end}}>
         <span>Keep addon data between sessions<br><span class="hint">Copies your saved data into the addon's Seed.lua, because the Forever client didn't load it back at startup during the beta.</span></span></label>
+      {{if .CanStartAtLogin}}
+      <label class="check"><input type="checkbox" name="startAtLogin" {{if .StartAtLogin}}checked{{end}}>
+        <span>Start with my computer<br><span class="hint">Starts the companion when you log in, without opening this page. It keeps working if the companion updates itself; if you move the file, start it once from its new place.</span></span></label>
+      {{end}}
       <label class="check"><input type="checkbox" name="openOnLaunch" {{if .Settings.OpenOnLaunch}}checked{{end}}>
         <span>Open this page when the companion starts</span></label>
       <label class="check"><input type="checkbox" name="autoUpdate" {{if .AutoUpdate}}checked{{end}}>
