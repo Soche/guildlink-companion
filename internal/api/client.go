@@ -47,6 +47,9 @@ type SyncResult struct {
 	RostersUnverified int `json:"rostersUnverified"`
 	BanksStored       int `json:"banksStored"`
 	BanksUnverified   int `json:"banksUnverified"`
+	// Raids the bot kept, and ones none of the uploader's characters was in.
+	RaidsStored     int `json:"raidsStored"`
+	RaidsUnverified int `json:"raidsUnverified"`
 	// Which guild's roster or bank was refused, and why: "not-member" (none of
 	// the uploader's characters is in it) or "not-listed" (theirs isn't on
 	// its roster). Older bots don't send it.

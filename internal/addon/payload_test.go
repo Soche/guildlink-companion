@@ -33,7 +33,7 @@ func TestFromSavedVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(p)
-	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","region":"EU","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"guildRankIndex":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118,"classId":0,"subclassId":1,"equipLoc":null,"enchant":false,"category":"Potions","reagents":[{"itemId":2447,"count":1,"name":"Peacebloom"},{"itemId":765,"count":2,"name":null}]}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}],"instances":[{"instanceId":2050,"name":"Hyjal Summit","kind":"raid","maxPlayers":20}],"guildRosters":[],"guildBanks":[]}`
+	want := `{"addonSchema":1,"discordId":"123456789012345678","characters":[{"name":"Jaina","realm":"","region":"EU","class":"MAGE","className":null,"race":null,"faction":null,"level":12,"guild":null,"guildRank":null,"guildRankIndex":null,"updatedAt":1000,"professions":[{"skillLineId":171,"name":"Alchemy","rank":5,"maxRank":null,"scannedAt":999,"recipes":[{"recipeId":2330,"name":"Minor Healing Potion","itemId":118,"classId":0,"subclassId":1,"equipLoc":null,"enchant":false,"category":"Potions","reagents":[{"itemId":2447,"count":1,"name":"Peacebloom"},{"itemId":765,"count":2,"name":null}]}]},{"skillLineId":197,"name":"Tailoring","rank":40,"maxRank":75,"scannedAt":null,"recipes":null}]}],"instances":[{"instanceId":2050,"name":"Hyjal Summit","kind":"raid","maxPlayers":20}],"guildRosters":[],"guildBanks":[],"raids":[]}`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
@@ -90,7 +90,7 @@ func TestGuildBanks(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(p.GuildBanks)
-	want := `[{"guild":"Nobility","region":"EU","scannedAt":900,"money":1234567,"numTabs":3,"tabs":[{"index":1,"name":"Mats","scannedAt":898,"items":[]},{"index":3,"name":"Potions","scannedAt":899,"items":[{"slot":98,"itemId":118,"name":"Minor Healing Potion","count":5,"quality":1}]}],"access":[{"rank":2,"tab":1,"canView":true,"at":897,"source":"observed"},{"rank":2,"tab":3,"canView":false,"at":897,"source":"observed"},{"rank":0,"tab":1,"canView":true,"at":890,"source":"settings"},{"rank":1,"tab":3,"canView":false,"at":890,"source":"settings"}]}]`
+	want := `[{"guild":"Nobility","region":"EU","scannedAt":900,"money":1234567,"numTabs":3,"tabs":[{"index":1,"name":"Mats","scannedAt":898,"items":[]},{"index":3,"name":"Potions","scannedAt":899,"items":[{"slot":98,"itemId":118,"name":"Minor Healing Potion","count":5,"quality":1}]}],"access":[{"rank":2,"tab":1,"canView":true,"at":897,"source":"observed"},{"rank":2,"tab":3,"canView":false,"at":897,"source":"observed"},{"rank":0,"tab":1,"canView":true,"at":890,"source":"settings"},{"rank":1,"tab":3,"canView":false,"at":890,"source":"settings"}],"log":[]}]`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
@@ -127,5 +127,39 @@ func TestInventory(t *testing.T) {
 	want := `{"Inv":{"bags":{"scannedAt":10,"items":[{"itemId":2840,"name":"Copper Bar","count":25,"quality":1}]},"bank":{"scannedAt":9,"items":[]}},"Acct":{"accountKey":"","scannedAt":8,"items":[{"itemId":4306,"name":"Silk Cloth","count":10,"quality":null}]}}`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
+func TestRaidsAndBankLogs(t *testing.T) {
+	vars, err := luasv.Parse(`GuildLinkDB = {
+		["raids"] = { ["409:1000"] = {
+			["instanceID"] = 409, ["name"] = "Molten Core", ["maxPlayers"] = 40, ["region"] = "EU",
+			["startedAt"] = 1000, ["endedAt"] = 5000,
+			["members"] = { ["Inara Kikuchi"] = { ["class"] = "MAGE", ["firstSeen"] = 1000, ["lastSeen"] = 5000 } },
+			["loot"] = { { ["at"] = 2000, ["name"] = "Inara Kikuchi", ["itemID"] = 16800, ["itemName"] = "Arcanist Boots", ["quality"] = 4, ["count"] = 1 } },
+			["encounters"] = { { ["id"] = 663, ["name"] = "Lucifron", ["success"] = true, ["size"] = 40, ["at"] = 1900 } },
+		} },
+		["guildBanks"] = { ["Valkyria"] = { ["guild"] = "Valkyria", ["scannedAt"] = 900, ["tabs"] = {},
+			["log"] = { [1] = { ["scannedAt"] = 900, ["entries"] = { { ["type"] = "deposit", ["name"] = "Soche Kikuchi", ["itemID"] = 2840, ["itemName"] = "Copper Bar", ["count"] = 20, ["ago"] = 3 } } } },
+			["moneyLog"] = { ["scannedAt"] = 900, ["entries"] = { { ["type"] = "withdraw", ["name"] = "Soche Kikuchi", ["amount"] = 50000, ["ago"] = 0 } } },
+		} },
+	}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := FromSavedVariables(vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(p.Raids)
+	want := `[{"instanceId":409,"name":"Molten Core","maxPlayers":40,"region":"EU","startedAt":1000,"endedAt":5000,"members":[{"name":"Inara Kikuchi","class":"MAGE","firstSeen":1000,"lastSeen":5000}],"loot":[{"at":2000,"name":"Inara Kikuchi","itemId":16800,"itemName":"Arcanist Boots","quality":4,"count":1}],"encounters":[{"id":663,"name":"Lucifron","success":true,"size":40,"at":1900}]}]`
+	if string(got) != want {
+		t.Errorf("raids\ngot  %s\nwant %s", got, want)
+	}
+	b := p.GuildBanks[0]
+	logs, _ := json.Marshal([]any{b.Log, b.MoneyLog})
+	wantLogs := `[[{"tab":1,"scannedAt":900,"entries":[{"type":"deposit","name":"Soche Kikuchi","itemId":2840,"itemName":"Copper Bar","count":20,"tab1":null,"tab2":null,"ago":3}]}],{"scannedAt":900,"entries":[{"type":"withdraw","name":"Soche Kikuchi","amount":50000,"ago":0}]}]`
+	if string(logs) != wantLogs {
+		t.Errorf("logs\ngot  %s\nwant %s", logs, wantLogs)
 	}
 }

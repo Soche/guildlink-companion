@@ -226,6 +226,8 @@ async function refresh() {
       <div class="muted">${synced ? "Last upload " + esc(synced) + (r ? `: ${r.accepted} characters, ${r.recipesStored} recipes stored` : "") : "Not uploaded yet"}</div>
       ${r && f.rosters ? guildLines("roster", "Guild roster", f.rosters, r.rostersStored, r.rostersUnverified, r.refused) : ""}
       ${r && f.banks ? guildLines("bank", "Guild bank", f.banks, r.banksStored, r.banksUnverified, r.refused) : ""}
+      ${r && r.raidsStored ? `<div class="good">Raids: ${r.raidsStored} accepted</div>` : ""}
+      ${r && r.raidsUnverified ? `<div class="muted">${r.raidsUnverified} raid${r.raidsUnverified === 1 ? "" : "s"} not used: none of your linked characters was in ${r.raidsUnverified === 1 ? "it" : "them"}.</div>` : ""}
       ${f.lastError ? `<div class="err">${esc(f.lastError)}</div>` : ""}${rejected}
       <div class="path">${esc(f.path)}</div>
     </div>`;

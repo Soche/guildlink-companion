@@ -116,6 +116,8 @@ type Payload struct {
 	// An account-wide bank, if the client has one. AccountKey is set by the
 	// syncer (a hash of the WTF account folder) to tell accounts apart.
 	AccountBank *AccountBank `json:"accountBank,omitempty"`
+	// Raids for attendance, loot and boss progress (addon 0.10.0+).
+	Raids []Raid `json:"raids"`
 }
 
 type AccountBank struct {
@@ -132,6 +134,9 @@ type GuildBank struct {
 	Tabs      []BankTab `json:"tabs"`
 	// Which ranks can view which tabs (addon 0.7.0+).
 	Access []TabAccess `json:"access"`
+	// The tabs' logs and the gold log (addon 0.10.0+).
+	Log      []BankLog `json:"log"`
+	MoneyLog *MoneyLog `json:"moneyLog,omitempty"`
 }
 
 // TabAccess is one rank's view permission on one tab, either from the
@@ -207,7 +212,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s not found; log in with the addon enabled, then log out or /reload", Global)
 	}
-	p := &Payload{Characters: []Character{}, Instances: []Instance{}, GuildRosters: []GuildRoster{}, GuildBanks: []GuildBank{}}
+	p := &Payload{Characters: []Character{}, Instances: []Instance{}, GuildRosters: []GuildRoster{}, GuildBanks: []GuildBank{}, Raids: []Raid{}}
 	if v, ok := db.Int("schema"); ok {
 		p.AddonSchema = v
 	}
@@ -294,6 +299,7 @@ func FromSavedVariables(vars map[string]any) (*Payload, error) {
 	}
 	p.GuildRosters = rostersOf(db)
 	p.GuildBanks = banksOf(db)
+	p.Raids = raidsOf(db)
 	if box := containerOf(db, "accountBank"); box != nil {
 		p.AccountBank = &AccountBank{Container: *box}
 	}
@@ -371,6 +377,8 @@ func banksOf(db luasv.Table) []GuildBank {
 		// "permissions" (addon 0.7.0/0.7.1) is ignored: it came from a blocked
 		// rank switch and may hold one rank's view for every rank.
 		b.Access = append(accessOf(bt, "observed"), accessOf(bt, "settings")...)
+		b.Log = bankLogsOf(bt)
+		b.MoneyLog = moneyLogOf(bt)
 		out = append(out, b)
 	}
 	return out
