@@ -113,3 +113,24 @@ func (c *Client) Sync(ctx context.Context, payload any) (*SyncResult, error) {
 	var res SyncResult
 	return &res, c.do(ctx, http.MethodPost, "/sync", payload, &res)
 }
+
+// Event is an upcoming event in one of the user's Discord servers.
+type Event struct {
+	ID          int     `json:"id"`
+	Title       string  `json:"title"`
+	Description *string `json:"description"`
+	Type        string  `json:"type"` // dungeon, raid or event
+	StartsAt    int64   `json:"startsAt"`
+	Instance    *string `json:"instance"`
+	Signup      *struct {
+		Role   string `json:"role"`
+		Status string `json:"status"` // confirmed or bench
+	} `json:"signup"`
+}
+
+func (c *Client) Events(ctx context.Context) ([]Event, error) {
+	var res struct {
+		Events []Event `json:"events"`
+	}
+	return res.Events, c.do(ctx, http.MethodGet, "/events", nil, &res)
+}

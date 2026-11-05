@@ -166,6 +166,7 @@ func (w *Server) saveSettings(rw http.ResponseWriter, r *http.Request) {
 	s.WriteSeed = r.FormValue("writeSeed") == "on"
 	s.OpenOnLaunch = r.FormValue("openOnLaunch") == "on"
 	s.DisableAutoUpdate = r.FormValue("autoUpdate") != "on"
+	s.DisableCalendar = r.FormValue("calendar") != "on"
 	// None ticked means "pick automatically".
 	s.AddonFlavors = r.Form["addonFlavor"]
 

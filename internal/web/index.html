@@ -61,6 +61,11 @@
   </section>
 
   <section>
+    <h2>Game calendar</h2>
+    <div id="calendar" class="muted">Checking…</div>
+  </section>
+
+  <section>
     <h2>Updates</h2>
     <div id="updates" class="muted">Checking…</div>
     <div class="row">
@@ -98,6 +103,8 @@
       <label class="check"><input type="checkbox" name="startAtLogin" {{if .StartAtLogin}}checked{{end}}>
         <span>Start with my computer<br><span class="hint">Starts the companion when you log in, without opening this page. It keeps working if the companion updates itself; if you move the file, start it once from its new place.</span></span></label>
       {{end}}
+      <label class="check"><input type="checkbox" name="calendar" {{if not .Settings.DisableCalendar}}checked{{end}}>
+        <span>Offer Discord events for the game calendar<br><span class="hint">Gives the addon the events coming up in your Discord servers. At login it lists the ones not in your calendar yet, with a button to add each.</span></span></label>
       <label class="check"><input type="checkbox" name="openOnLaunch" {{if .Settings.OpenOnLaunch}}checked{{end}}>
         <span>Open this page when the companion starts</span></label>
       <label class="check"><input type="checkbox" name="autoUpdate" {{if .AutoUpdate}}checked{{end}}>
@@ -196,6 +203,16 @@ async function refresh() {
   } else {
     banner.className = "banner ok";
     text.textContent = files.length ? "Watching for changes. New data uploads a few seconds after you log out or /reload." : "Waiting for saved data.";
+  }
+  const cal = st.calendar || {};
+  const calEl = document.getElementById("calendar");
+  if (calEl) {
+    const fetched = when(cal.fetched);
+    calEl.innerHTML = cal.off ? "Turned off in the settings below."
+      : cal.error ? `<span class="err">${esc(cal.error)}</span>`
+      : fetched ? `${cal.events} upcoming event${cal.events === 1 ? "" : "s"} from Discord, fetched ${esc(fetched)}.` +
+          ((cal.writtenTo || []).length ? ` In game they show at your next login or /reload.` : ` Install the addon to use them.`)
+      : "Waiting for the server address and token.";
   }
   if (!files.length) return;
   document.getElementById("files").innerHTML = files.map((f) => {

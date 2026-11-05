@@ -13,10 +13,11 @@ import (
 	"strings"
 )
 
-const (
-	addonFolder = "GuildLink"
-	seedFile    = "Seed.lua"
-)
+const addonFolder = "GuildLink"
+
+// Files the companion writes into the addon folder, kept across addon
+// updates: the saved-data copy and the upcoming events.
+var keptFiles = []string{"Seed.lua", "Events.lua"}
 
 // AddonAssetName is the zip the addon's release workflow attaches.
 func AddonAssetName(tag string) string { return "GuildLink-" + tag + ".zip" }
@@ -40,7 +41,7 @@ func InstalledAddonVersion(addonsDir string) (version string, ok bool) {
 
 // InstallAddon replaces addonsDir/GuildLink with the zip's GuildLink folder.
 // The zip is fully extracted beside the old folder before anything is
-// swapped, the previous Seed.lua (saved data, see the addon README) is kept,
+// swapped, the files the companion wrote (Seed.lua, Events.lua) are kept,
 // and on failure the old folder is put back.
 func InstallAddon(zipData []byte, addonsDir string) error {
 	zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
@@ -60,10 +61,12 @@ func InstallAddon(zipData []byte, addonsDir string) error {
 		_ = os.RemoveAll(staging)
 		return err
 	}
-	if seed, err := os.ReadFile(filepath.Join(target, seedFile)); err == nil {
-		if err := os.WriteFile(filepath.Join(staging, seedFile), seed, 0o644); err != nil {
-			_ = os.RemoveAll(staging)
-			return err
+	for _, name := range keptFiles {
+		if data, err := os.ReadFile(filepath.Join(target, name)); err == nil {
+			if err := os.WriteFile(filepath.Join(staging, name), data, 0o644); err != nil {
+				_ = os.RemoveAll(staging)
+				return err
+			}
 		}
 	}
 

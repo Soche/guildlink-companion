@@ -119,6 +119,10 @@ func TestRetiredBetaIsNotUploadedAndCarriesDiscordID(t *testing.T) {
 
 	var uploads atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/events" {
+			_, _ = w.Write([]byte(`{"events":[{"id":3,"title":"Molten Core","type":"raid","startsAt":1800000000}]}`))
+			return
+		}
 		uploads.Add(1)
 		_, _ = w.Write([]byte(`{"ok":true,"accepted":1}`))
 	}))
@@ -132,6 +136,12 @@ func TestRetiredBetaIsNotUploadedAndCarriesDiscordID(t *testing.T) {
 
 	if uploads.Load() != 0 {
 		t.Errorf("retired beta data uploaded")
+	}
+	if events, _ := os.ReadFile(filepath.Join(launchAddon, "Events.lua")); !strings.Contains(string(events), `title = "Molten Core"`) {
+		t.Errorf("Events.lua = %q", events)
+	}
+	if st := s.Status().Calendar; st.Events != 1 || st.Error != "" {
+		t.Errorf("calendar status %+v", st)
 	}
 	seed, _ := os.ReadFile(seedPath)
 	if !strings.Contains(string(seed), `GuildLinkDB = { discordId = "123456789012345678" }`) || strings.Contains(string(seed), "Thrall") {

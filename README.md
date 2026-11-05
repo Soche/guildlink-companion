@@ -15,11 +15,13 @@ It finds `GuildLink.lua` under every game flavor and account (`<WoW>/_*_/WTF/Acc
 
 With **Keep addon data between sessions** on (the default), it also copies the newest saved data into the addon's `Seed.lua`. This works around the Forever client not loading SavedVariables, as it did during the beta (see the addon README).
 
+With **Offer Discord events for the game calendar** on (the default), it fetches the upcoming events from your Discord servers every 10 minutes and writes them to the addon's `Events.lua` in every game folder that has the addon. The addon reads that file at login or `/reload` and offers to add them to the game's calendar. **Sync now** fetches them straight away.
+
 ### Updates
 
 A few seconds after starting, and then every six hours, the companion checks the latest GitHub releases of [the addon](https://github.com/Soche/guildlink-addon/releases) and [itself](https://github.com/Soche/guildlink-companion/releases):
 
-- **Addon:** installed or updated in the chosen game folders. By default that's folders that already have it, otherwise the Forever one (`_forever_`); you can pick folders on the settings page. Once the release client (`_forever_`) is installed, the beta's folder (`_classic_beta_`) is retired: the addon is installed into `_forever_` instead, beta data is no longer uploaded, and your Discord ID is carried over so you don't have to enter it again. The addon's `Seed.lua` (your saved data) is kept. Changes take effect at the next login or `/reload`.
+- **Addon:** installed or updated in the chosen game folders. By default that's folders that already have it, otherwise the Forever one (`_forever_`); you can pick folders on the settings page. Once the release client (`_forever_`) is installed, the beta's folder (`_classic_beta_`) is retired: the addon is installed into `_forever_` instead, beta data is no longer uploaded, and your Discord ID is carried over so you don't have to enter it again. The files the companion writes into the addon (`Seed.lua`, `Events.lua`) are kept. Changes take effect at the next login or `/reload`.
 - **Companion:** the new binary replaces the running one and the companion restarts itself; the page then says what it updated from. Development builds (`dev`) never update themselves.
 - Every download is checked against the release's `SHA256SUMS` before it is used; a mismatch is reported and nothing is installed.
 - Turn automatic updates off on the settings page to only be told about them, then use **Update now**.
@@ -51,7 +53,8 @@ cmd/guildlink-companion   entrypoint, tray icon
 internal/luasv            SavedVariables (Lua table) parser
 internal/addon            addon data → upload payload
 internal/wow              install detection, file discovery, Seed.lua
-internal/syncer           polling and upload loop
+internal/syncer           polling and upload loop, event fetching
+internal/calendar         upcoming events → the addon's Events.lua
 internal/web              local settings/status page
 internal/api              bot API client
 ```

@@ -6,9 +6,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -16,6 +19,7 @@ import (
 
 	"guildlink/companion/internal/addon"
 	"guildlink/companion/internal/api"
+	"guildlink/companion/internal/calendar"
 	"guildlink/companion/internal/config"
 	"guildlink/companion/internal/luasv"
 	"guildlink/companion/internal/wow"
@@ -24,6 +28,8 @@ import (
 const (
 	pollInterval = 5 * time.Second
 	retryDelay   = time.Minute
+	// How often the upcoming events are fetched for the game's calendar.
+	calendarInterval = 10 * time.Minute
 )
 
 type FileStatus struct {
@@ -43,9 +49,19 @@ type FileStatus struct {
 }
 
 type Status struct {
-	Problem   string       `json:"problem"`
-	Files     []FileStatus `json:"files"`
-	LastCheck time.Time    `json:"lastCheck"`
+	Problem   string         `json:"problem"`
+	Files     []FileStatus   `json:"files"`
+	LastCheck time.Time      `json:"lastCheck"`
+	Calendar  CalendarStatus `json:"calendar"`
+}
+
+// CalendarStatus is how the last fetch of events for the game's calendar went.
+type CalendarStatus struct {
+	Off       bool      `json:"off"`
+	Events    int       `json:"events"`
+	Fetched   time.Time `json:"fetched"`
+	Error     string    `json:"error"`
+	WrittenTo []string  `json:"writtenTo"` // flavors with the addon that got the file
 }
 
 type Syncer struct {
@@ -57,6 +73,8 @@ type Syncer struct {
 	files   map[string]*FileStatus
 	problem string
 	checked time.Time
+	cal     CalendarStatus
+	calNext time.Time
 }
 
 func New(store *config.Store, version string) *Syncer {
@@ -92,7 +110,7 @@ func (s *Syncer) SyncNow() {
 func (s *Syncer) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := Status{Problem: s.problem, LastCheck: s.checked}
+	st := Status{Problem: s.problem, LastCheck: s.checked, Calendar: s.cal}
 	for _, f := range s.files {
 		st.Files = append(st.Files, *f)
 	}
@@ -113,6 +131,7 @@ func (s *Syncer) check(ctx context.Context, force bool) {
 		s.setProblem("Choose your World of Warcraft folder in the settings below.")
 		return
 	}
+	s.refreshCalendar(ctx, settings, force)
 	found, err := wow.FindSavedVariables(settings.WowDir)
 	if err != nil || len(found) == 0 {
 		s.setProblem(fmt.Sprintf("No GuildLink saved data under %s yet. Install the addon, log in to a character, then log out or type /reload.", settings.WowDir))
@@ -180,6 +199,53 @@ func (s *Syncer) check(ctx context.Context, force bool) {
 		}
 		s.upload(ctx, settings, f, content, force)
 	}
+}
+
+// refreshCalendar fetches the upcoming events every calendarInterval (or
+// when forced) and writes them where the addon reads them at login.
+func (s *Syncer) refreshCalendar(ctx context.Context, settings config.Settings, force bool) {
+	if settings.DisableCalendar {
+		s.mu.Lock()
+		s.cal = CalendarStatus{Off: true}
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Lock()
+	due := force || !time.Now().Before(s.calNext)
+	s.mu.Unlock()
+	if !due || settings.ServerURL == "" || settings.Token == "" {
+		return
+	}
+	events, err := api.New(settings.ServerURL, settings.Token, s.version).Events(ctx)
+	st := CalendarStatus{Fetched: time.Now()}
+	next := time.Now().Add(calendarInterval)
+	var apiErr *api.Error
+	switch {
+	case errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound:
+		st.Error = "The bot doesn't send events yet; it needs updating."
+	case err != nil:
+		st.Error = err.Error()
+		next = time.Now().Add(retryDelay)
+	default:
+		st.Events = len(events)
+		written, werr := calendar.Write(settings.WowDir, calendar.Render(events))
+		if werr != nil {
+			st.Error = "writing Events.lua: " + werr.Error()
+			next = time.Now().Add(retryDelay)
+		}
+		if len(written) > 0 {
+			log.Printf("wrote %d upcoming events for %s", len(events), strings.Join(written, ", "))
+		}
+		for _, f := range wow.Flavors(settings.WowDir) {
+			if _, err := os.Stat(filepath.Join(wow.AddOnsDir(settings.WowDir, f), wow.AddonName)); err == nil {
+				st.WrittenTo = append(st.WrittenTo, f)
+			}
+		}
+	}
+	s.mu.Lock()
+	s.cal = st
+	s.calNext = next
+	s.mu.Unlock()
 }
 
 // carryDiscordID seeds the Forever release client's addon with the Discord

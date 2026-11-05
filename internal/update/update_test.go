@@ -83,6 +83,8 @@ func TestInstallAddonKeepsSeedAndReplacesFiles(t *testing.T) {
 	}
 	seed := filepath.Join(addons, "GuildLink", "Seed.lua")
 	os.WriteFile(seed, []byte("GuildLinkDB = { mine = true }"), 0o644)
+	events := filepath.Join(addons, "GuildLink", "Events.lua")
+	os.WriteFile(events, []byte("GuildLinkEvents = {}"), 0o644)
 	os.WriteFile(filepath.Join(addons, "GuildLink", "Stale.lua"), []byte("old"), 0o644)
 
 	if err := InstallAddon(addonZip(t, "v0.6.0", nil), addons); err != nil {
@@ -93,6 +95,9 @@ func TestInstallAddonKeepsSeedAndReplacesFiles(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(seed); string(got) != "GuildLinkDB = { mine = true }" {
 		t.Errorf("Seed.lua = %q", got)
+	}
+	if got, _ := os.ReadFile(events); string(got) != "GuildLinkEvents = {}" {
+		t.Errorf("Events.lua = %q", got)
 	}
 	if _, err := os.Stat(filepath.Join(addons, "GuildLink", "Stale.lua")); !os.IsNotExist(err) {
 		t.Error("files removed from the addon were left behind")

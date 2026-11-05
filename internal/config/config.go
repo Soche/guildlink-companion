@@ -18,6 +18,9 @@ type Settings struct {
 	OpenOnLaunch bool   `json:"openOnLaunch"`
 	// Updates are on unless turned off, so older settings files keep them on.
 	DisableAutoUpdate bool `json:"disableAutoUpdate"`
+	// Upcoming Discord events go to the addon for the game's calendar unless
+	// turned off.
+	DisableCalendar bool `json:"disableCalendar"`
 	// Game flavor folders (e.g. "_classic_beta_") to keep the addon
 	// installed in; empty means pick automatically.
 	AddonFlavors []string `json:"addonFlavors"`
