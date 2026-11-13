@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -21,6 +20,7 @@ import (
 	"guildlink/companion/internal/api"
 	"guildlink/companion/internal/calendar"
 	"guildlink/companion/internal/config"
+	"guildlink/companion/internal/i18n"
 	"guildlink/companion/internal/luasv"
 	"guildlink/companion/internal/wow"
 )
@@ -49,7 +49,11 @@ type FileStatus struct {
 }
 
 type Status struct {
-	Problem   string         `json:"problem"`
+	Problem string `json:"problem"`
+	// ProblemCode names Problem for the page to show in its language
+	// (an i18n key), with ProblemArgs filling its {placeholders}.
+	ProblemCode string            `json:"problemCode,omitempty"`
+	ProblemArgs map[string]string `json:"problemArgs,omitempty"`
 	Files     []FileStatus   `json:"files"`
 	LastCheck time.Time      `json:"lastCheck"`
 	Calendar  CalendarStatus `json:"calendar"`
@@ -61,7 +65,8 @@ type CalendarStatus struct {
 	Events    int       `json:"events"`
 	Fetched   time.Time `json:"fetched"`
 	Error     string    `json:"error"`
-	WrittenTo []string  `json:"writtenTo"` // flavors with the addon that got the file
+	ErrorCode string    `json:"errorCode,omitempty"` // an i18n key for Error, when it's one of ours
+	WrittenTo []string  `json:"writtenTo"`           // flavors with the addon that got the file
 }
 
 type Syncer struct {
@@ -71,8 +76,10 @@ type Syncer struct {
 
 	mu      sync.Mutex
 	files   map[string]*FileStatus
-	problem string
-	checked time.Time
+	problem     string
+	problemCode string
+	problemArgs map[string]string
+	checked     time.Time
 	cal     CalendarStatus
 	calNext time.Time
 }
@@ -110,7 +117,7 @@ func (s *Syncer) SyncNow() {
 func (s *Syncer) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := Status{Problem: s.problem, LastCheck: s.checked, Calendar: s.cal}
+	st := Status{Problem: s.problem, ProblemCode: s.problemCode, ProblemArgs: s.problemArgs, LastCheck: s.checked, Calendar: s.cal}
 	for _, f := range s.files {
 		st.Files = append(st.Files, *f)
 	}
@@ -118,9 +125,20 @@ func (s *Syncer) Status() Status {
 	return st
 }
 
-func (s *Syncer) setProblem(p string) {
+// setProblem sets what stops uploads (code is the i18n key, args fill its
+// placeholders), or clears it with an empty code.
+func (s *Syncer) setProblem(code string, args ...string) {
 	s.mu.Lock()
-	s.problem = p
+	s.problemCode = code
+	s.problem = ""
+	s.problemArgs = nil
+	if code != "" {
+		s.problem = i18n.T(i18n.Default, code, args...)
+		s.problemArgs = map[string]string{}
+		for i := 0; i+1 < len(args); i += 2 {
+			s.problemArgs[args[i]] = args[i+1]
+		}
+	}
 	s.checked = time.Now()
 	s.mu.Unlock()
 }
@@ -128,13 +146,13 @@ func (s *Syncer) setProblem(p string) {
 func (s *Syncer) check(ctx context.Context, force bool) {
 	settings := s.store.Get()
 	if settings.WowDir == "" {
-		s.setProblem("Choose your World of Warcraft folder in the settings below.")
+		s.setProblem("problemWowDir")
 		return
 	}
 	s.refreshCalendar(ctx, settings, force)
 	found, err := wow.FindSavedVariables(settings.WowDir)
 	if err != nil || len(found) == 0 {
-		s.setProblem(fmt.Sprintf("No GuildLink saved data under %s yet. Install the addon, log in to a character, then log out or type /reload.", settings.WowDir))
+		s.setProblem("problemNoData", "dir", settings.WowDir)
 		s.mu.Lock()
 		s.files = map[string]*FileStatus{}
 		s.mu.Unlock()
@@ -142,7 +160,7 @@ func (s *Syncer) check(ctx context.Context, force bool) {
 	}
 	switch {
 	case settings.ServerURL == "" || settings.Token == "":
-		s.setProblem("Add the server address and token from the bot's /link command.")
+		s.setProblem("problemNoServer")
 	default:
 		s.setProblem("")
 	}
@@ -222,7 +240,8 @@ func (s *Syncer) refreshCalendar(ctx context.Context, settings config.Settings, 
 	var apiErr *api.Error
 	switch {
 	case errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound:
-		st.Error = "The bot doesn't send events yet; it needs updating."
+		st.Error = i18n.T(i18n.Default, "calBotOld")
+		st.ErrorCode = "calBotOld"
 	case err != nil:
 		st.Error = err.Error()
 		next = time.Now().Add(retryDelay)

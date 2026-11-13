@@ -24,6 +24,9 @@ type Settings struct {
 	// Game flavor folders (e.g. "_classic_beta_") to keep the addon
 	// installed in; empty means pick automatically.
 	AddonFlavors []string `json:"addonFlavors"`
+	// "sv" or "en", picked with the flags on the settings page; empty
+	// means follow the browser's language.
+	Language string `json:"language,omitempty"`
 }
 
 func (s Settings) Ready() bool { return s.ServerURL != "" && s.Token != "" && s.WowDir != "" }

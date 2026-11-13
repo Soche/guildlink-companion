@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{.Lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -43,92 +43,125 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .chips button { font-size: 12px; padding: 3px 8px; }
   #testResult { margin-top: 10px; font-size: 14px; }
+  .head-right { display: flex; align-items: center; gap: 12px; }
+  .lang { display: flex; gap: 6px; margin: 0; }
+  .lang button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 13px; }
+  .lang button[aria-pressed="true"] { border-color: var(--accent); font-weight: 600; }
+  .lang svg { display: block; border-radius: 2px; box-shadow: 0 0 0 1px rgb(0 0 0 / 20%); }
+  .help { font-size: 13px; margin-left: 6px; }
 </style>
 </head>
 <body>
 <main>
   <header>
     <h1>GuildLink Companion</h1>
-    <span class="muted">v{{.Version}}</span>
+    <div class="head-right">
+      <form class="lang" method="post" action="/language" aria-label="{{.T.language}}">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        {{range .Languages}}<button type="submit" name="lang" value="{{.Code}}" lang="{{.Code}}" title="{{.Name}}" aria-pressed="{{.Current}}">{{.Flag}}<span>{{.Name}}</span></button>{{end}}
+      </form>
+      <span class="muted">v{{.Version}}</span>
+    </div>
   </header>
 
-  <section id="banner" class="banner"><span id="bannerText">Checking…</span></section>
+  <section id="banner" class="banner"><span id="bannerText">{{.T.checking}}</span></section>
 
   <section>
-    <h2>Uploads</h2>
-    <div id="files" class="muted">No saved data found yet.</div>
-    <div class="row"><button type="button" id="syncBtn">Sync now</button></div>
+    <h2>{{.T.uploads}}</h2>
+    <div id="files" class="muted">{{.T.noData}}</div>
+    <div class="row"><button type="button" id="syncBtn">{{.T.syncNow}}</button></div>
   </section>
 
   <section>
-    <h2>Game calendar</h2>
-    <div id="calendar" class="muted">Checking…</div>
+    <h2>{{.T.gameCalendar}}</h2>
+    <div id="calendar" class="muted">{{.T.checking}}</div>
   </section>
 
   <section>
-    <h2>Updates</h2>
-    <div id="updates" class="muted">Checking…</div>
+    <h2>{{.T.updates}}</h2>
+    <div id="updates" class="muted">{{.T.checking}}</div>
     <div class="row">
-      <button type="button" id="checkBtn">Check for updates</button>
-      <button type="button" id="applyBtn">Update now</button>
+      <button type="button" id="checkBtn">{{.T.checkUpdates}}</button>
+      <button type="button" id="applyBtn">{{.T.updateNow}}</button>
     </div>
   </section>
 
   <section>
-    <h2>Settings</h2>
-    {{if .Saved}}<p class="good">Settings saved.</p>{{end}}
+    <h2>{{.T.settings}}</h2>
+    {{if .Saved}}<p class="good">{{.T.saved}}</p>{{end}}
     {{if .SaveError}}<p class="err">{{.SaveError}}</p>{{end}}
     <form method="post" action="/settings">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
 
-      <label for="serverUrl">Server address</label>
+      <label for="serverUrl">{{.T.serverAddress}}</label>
       <input type="url" id="serverUrl" name="serverUrl" value="{{.Settings.ServerURL}}" placeholder="https://guildlink.example.com">
 
-      <label for="token">Token</label>
+      <label for="token">{{.T.token}}</label>
       <input type="password" id="token" name="token" autocomplete="off"
-        placeholder="{{if .TokenSet}}Saved. Leave blank to keep it{{else}}glk_…{{end}}">
-      <div class="hint">Run <code>/link</code> in your Discord server to get both.</div>
+        placeholder="{{if .TokenSet}}{{.T.tokenSaved}}{{else}}glk_…{{end}}">
+      <div class="hint">{{.TokenHint}}</div>
 
-      <label for="wowDir">World of Warcraft folder</label>
-      <input type="text" id="wowDir" name="wowDir" value="{{.Settings.WowDir}}" placeholder="The folder that contains _forever_, _retail_ …">
+      <label for="wowDir">{{.T.wowFolder}}</label>
+      <input type="text" id="wowDir" name="wowDir" value="{{.Settings.WowDir}}" placeholder="{{.T.wowPlaceholder}}">
       {{if .Detected}}
       <div class="chips">{{range .Detected}}<button type="button" class="pick" data-dir="{{.}}">{{.}}</button>{{end}}</div>
       {{else}}
-      <div class="hint">No install found in the usual places; paste the path.</div>
+      <div class="hint">{{.T.noInstall}}</div>
       {{end}}
 
       <label class="check"><input type="checkbox" name="writeSeed" {{if .Settings.WriteSeed}}checked{{end}}>
-        <span>Keep addon data between sessions<br><span class="hint">Copies your saved data into the addon's Seed.lua, because the Forever client didn't load it back at startup during the beta.</span></span></label>
+        <span>{{.T.writeSeed}}<br><span class="hint">{{.T.writeSeedHint}}</span></span></label>
       {{if .CanStartAtLogin}}
       <label class="check"><input type="checkbox" name="startAtLogin" {{if .StartAtLogin}}checked{{end}}>
-        <span>Start with my computer<br><span class="hint">Starts the companion when you log in, without opening this page. It keeps working if the companion updates itself; if you move the file, start it once from its new place.</span></span></label>
+        <span>{{.T.startAtLogin}}<br><span class="hint">{{.T.startAtLoginHint}}</span></span></label>
       {{end}}
       <label class="check"><input type="checkbox" name="calendar" {{if not .Settings.DisableCalendar}}checked{{end}}>
-        <span>Offer Discord events for the game calendar<br><span class="hint">Gives the addon the events coming up in your Discord servers. At login it lists the ones not in your calendar yet, with a button to add each.</span></span></label>
+        <span>{{.T.calendar}}<br><span class="hint">{{.T.calendarHint}}</span></span></label>
       <label class="check"><input type="checkbox" name="openOnLaunch" {{if .Settings.OpenOnLaunch}}checked{{end}}>
-        <span>Open this page when the companion starts</span></label>
+        <span>{{.T.openOnLaunch}}</span></label>
       <label class="check"><input type="checkbox" name="autoUpdate" {{if .AutoUpdate}}checked{{end}}>
-        <span>Keep the addon and companion up to date automatically<br><span class="hint">Installs the GuildLink addon if it's missing. Addon updates take effect at your next login or /reload.</span></span></label>
+        <span>{{.T.autoUpdate}}<br><span class="hint">{{.T.autoUpdateHint}}</span></span></label>
       {{if .Flavors}}
-      <label>Install the addon in</label>
+      <label>{{.T.installIn}}</label>
       {{range .Flavors}}<label class="check"><input type="checkbox" name="addonFlavor" value="{{.Name}}" {{if .Checked}}checked{{end}}><span><code>{{.Name}}</code></span></label>{{end}}
-      <div class="hint">The game folders inside your World of Warcraft folder. With none ticked, the companion picks: folders that already have the addon, otherwise the Forever one.</div>
+      <div class="hint">{{.T.installInHint}}</div>
       {{end}}
 
       <div class="row">
-        <button type="submit" class="primary">Save</button>
-        <button type="button" id="testBtn">Test connection</button>
+        <button type="submit" class="primary">{{.T.save}}</button>
+        <button type="button" id="testBtn">{{.T.testConnection}}</button>
       </div>
       <div id="testResult"></div>
     </form>
-    <p class="hint">Settings file: {{.ConfigPath}}</p>
+    <p class="hint">{{.T.settingsFile}} {{.ConfigPath}}</p>
   </section>
 </main>
 <script>
 const csrf = {{.CSRF}};
+const LANG = {{.Lang}};
+const T = {{.T}};
 const post = (url) => fetch(url, { method: "POST", headers: { "X-CSRF-Token": csrf } });
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const when = (t) => (t && !t.startsWith("0001")) ? new Date(t).toLocaleString() : null;
+// A text as HTML: the text is escaped, then {name} gets args[name], which
+// must already be HTML (escape anything from outside with esc).
+const th = (key, args = {}) => esc(T[key] ?? key).replace(/\{(\w+)\}/g, (m, n) => (n in args ? args[n] : m));
+const when = (t) => (t && !t.startsWith("0001")) ? new Date(t).toLocaleString(LANG === "sv" ? "sv-SE" : "en-GB") : null;
+const help = `<a class="help" href="${esc(T.helpUrl)}" target="_blank" rel="noopener">${th("whatMeans")}</a>`;
+
+// Messages from the bot, in this page's language when we know them.
+const BOT_MESSAGES = [
+  [/^beta character: not played since the release$/, () => th("reasonBeta")],
+  [/^empty entry \(no level or play time recorded\)$/, () => th("reasonEmpty")],
+  [/^claimed(?: in (.+?))? by another Discord account$/, (m) => th("reasonClaimed", { where: m[1] ? th("whereRegion", { region: esc(m[1]) }) : "" })],
+  [/The Discord user ID set in the addon \((.*?)\) does not belong to this token's account/, (m) => th("discordIdMismatch", { id: esc(m[1]) })],
+];
+function botMessage(text) {
+  for (const [re, fn] of BOT_MESSAGES) {
+    const m = re.exec(text || "");
+    if (m) return fn(m);
+  }
+  return esc(text);
+}
 
 document.querySelectorAll(".pick").forEach((b) => b.addEventListener("click", () => {
   document.getElementById("wowDir").value = b.dataset.dir;
@@ -141,21 +174,24 @@ document.getElementById("applyBtn").addEventListener("click", async () => { awai
 async function refreshUpdates() {
   let u;
   try { u = await (await fetch("/updates")).json(); } catch { return; }
+  const strong = (v) => `<strong>${esc(v)}</strong>`;
   const lines = [];
-  if (u.updatedFrom) lines.push(`<div class="good">Updated from ${esc(u.updatedFrom)} to ${esc(u.companionVersion)}.</div>`);
+  if (u.updatedFrom) lines.push(`<div class="good">${th("updatedFrom", { from: esc(u.updatedFrom), to: esc(u.companionVersion) })}</div>`);
   const newer = u.companionLatest && u.companionLatest !== u.companionVersion;
-  lines.push(`<div>Companion <strong>${esc(u.companionVersion)}</strong>${u.companionLatest ? (newer ? ` · <strong>${esc(u.companionLatest)}</strong> available` : " · up to date") : ""}</div>`);
+  lines.push(`<div>${th("companion")} ${strong(u.companionVersion)}${u.companionLatest ? " · " + (newer ? th("available", { v: strong(u.companionLatest) }) : th("upToDate")) : ""}</div>`);
   if (u.companionError) lines.push(`<div class="err">${esc(u.companionError)}</div>`);
   const targets = u.addonTargets || [];
-  if (!targets.length) lines.push(`<div>Addon: no game folder chosen yet (set your World of Warcraft folder below).</div>`);
+  if (!targets.length) lines.push(`<div>${th("noFolderChosen")}</div>`);
   for (const t of targets) {
-    const state = t.installed ? `<strong>${esc(t.installed)}</strong>${u.addonLatest && t.installed !== u.addonLatest ? ` · <strong>${esc(u.addonLatest)}</strong> available` : " · up to date"}` : "not installed";
-    lines.push(`<div>Addon in <code>${esc(t.flavor)}</code>: ${state}</div>`);
+    const state = t.installed
+      ? strong(t.installed) + " · " + (u.addonLatest && t.installed !== u.addonLatest ? th("available", { v: strong(u.addonLatest) }) : th("upToDate"))
+      : th("notInstalled");
+    lines.push(`<div>${th("addonIn", { flavor: `<code>${esc(t.flavor)}</code>` })} ${state}</div>`);
     if (t.error) lines.push(`<div class="err">${esc(t.error)}</div>`);
   }
   if (u.addonError) lines.push(`<div class="err">${esc(u.addonError)}</div>`);
   const checked = when(u.lastCheck);
-  lines.push(`<div class="muted">${u.checking ? "Checking now…" : checked ? "Last checked " + esc(checked) : ""}${u.autoUpdate ? "" : " · automatic updates are off"}</div>`);
+  lines.push(`<div class="muted">${u.checking ? th("checkingNow") : checked ? th("lastChecked", { when: esc(checked) }) : ""}${u.autoUpdate ? "" : " · " + th("autoOff")}</div>`);
   document.getElementById("updates").innerHTML = lines.join("");
 }
 refreshUpdates();
@@ -163,11 +199,11 @@ setInterval(refreshUpdates, 5000);
 
 document.getElementById("testBtn").addEventListener("click", async () => {
   const out = document.getElementById("testResult");
-  out.textContent = "Testing…";
+  out.textContent = T.testing;
   const res = await (await post("/test")).json();
-  if (res.error) { out.innerHTML = `<span class="err">${esc(res.error)}</span>`; return; }
-  const chars = (res.characters || []).map((c) => c.name).join(", ") || "none yet";
-  out.innerHTML = `<span class="good">Connected as Discord user ${esc(res.discordUserId)}.</span> Characters on the server: ${esc(chars)}.`;
+  if (res.error) { out.innerHTML = `<span class="err">${esc(res.error)}</span>${help}`; return; }
+  const chars = (res.characters || []).map((c) => c.name).join(", ") || T.noneYet;
+  out.innerHTML = `<span class="good">${th("connected", { id: esc(res.discordUserId) })}</span> ${th("charsOnServer", { list: esc(chars) })}`;
 });
 
 // Result lines for the rosters or banks in an upload. Data from a guild none
@@ -175,17 +211,17 @@ document.getElementById("testBtn").addEventListener("click", async () => {
 function guildLines(kind, label, sent, stored, refusedCount, refused) {
   const out = [];
   const mine = (refused || []).filter((x) => x.kind === kind);
-  if (stored) out.push(`<div class="good">${label}: accepted</div>`);
+  if (stored) out.push(`<div class="good">${th("accepted", { label })}</div>`);
   for (const x of mine) {
     if (x.reason === "not-member") {
-      out.push(`<div class="muted">${label} of &lt;${esc(x.guild)}&gt; not used: none of your characters is in that guild now.</div>`);
+      out.push(`<div class="muted">${th("notUsed", { label, guild: esc(x.guild) })}</div>`);
     } else {
-      out.push(`<div class="err">${label} of &lt;${esc(x.guild)}&gt; refused: your character in that guild isn't on its roster. Please report this.</div>`);
+      out.push(`<div class="err">${th("refused", { label, guild: esc(x.guild) })}</div>`);
     }
   }
   // Older bots only send counts.
-  if (!refused && refusedCount) out.push(`<div class="err">${label}: ${refusedCount} of ${sent} not accepted</div>`);
-  if (!out.length) out.push(`<div class="muted">${label}: nothing new (the bot already had this or newer)</div>`);
+  if (!refused && refusedCount) out.push(`<div class="err">${th("notAcceptedCount", { label, n: refusedCount, sent })}</div>`);
+  if (!out.length) out.push(`<div class="muted">${th("nothingNew", { label })}</div>`);
   return out.join("");
 }
 
@@ -197,38 +233,39 @@ async function refresh() {
   const files = st.files || [];
   const failing = files.filter((f) => f.lastError);
   if (st.problem) {
-    banner.className = "banner"; text.textContent = st.problem;
+    const args = Object.fromEntries(Object.entries(st.problemArgs || {}).map(([k, v]) => [k, esc(v)]));
+    banner.className = "banner"; text.innerHTML = st.problemCode && T[st.problemCode] ? th(st.problemCode, args) : esc(st.problem);
   } else if (failing.length) {
-    banner.className = "banner"; text.textContent = "Some uploads are failing; see below.";
+    banner.className = "banner"; text.innerHTML = th("someFailing");
   } else {
     banner.className = "banner ok";
-    text.textContent = files.length ? "Watching for changes. New data uploads a few seconds after you log out or /reload." : "Waiting for saved data.";
+    text.innerHTML = files.length ? th("watching") : th("waitingData");
   }
   const cal = st.calendar || {};
   const calEl = document.getElementById("calendar");
   if (calEl) {
     const fetched = when(cal.fetched);
-    calEl.innerHTML = cal.off ? "Turned off in the settings below."
-      : cal.error ? `<span class="err">${esc(cal.error)}</span>`
-      : fetched ? `${cal.events} upcoming event${cal.events === 1 ? "" : "s"} from Discord, fetched ${esc(fetched)}.` +
-          ((cal.writtenTo || []).length ? ` In game they show at your next login or /reload.` : ` Install the addon to use them.`)
-      : "Waiting for the server address and token.";
+    calEl.innerHTML = cal.off ? th("calOff")
+      : cal.error ? `<span class="err">${cal.errorCode && T[cal.errorCode] ? th(cal.errorCode) : esc(cal.error)}</span>`
+      : fetched ? th(cal.events === 1 ? "calEventsOne" : "calEventsMany", { n: cal.events, when: esc(fetched) }) + " " +
+          ((cal.writtenTo || []).length ? th("calInGame") : th("calInstall"))
+      : th("calWaiting");
   }
   if (!files.length) return;
   document.getElementById("files").innerHTML = files.map((f) => {
     const r = f.result;
     const rejected = r && r.rejected && r.rejected.length
-      ? `<div class="err">Not accepted: ${r.rejected.map((x) => esc(x.name) + " (" + esc(x.reason) + ")").join(", ")}</div>` : "";
+      ? `<div class="err">${th("notAccepted")} ${r.rejected.map((x) => esc(x.name) + " (" + botMessage(x.reason) + ")").join(", ")}</div>` : "";
     const synced = when(f.lastSync);
     return `<div class="file">
-      <div><strong>${esc(f.flavor)}</strong> · account ${esc(f.account)} · ${f.characters} characters, ${f.recipes} recipes</div>
-      <div class="muted">Addon Discord ID: ${esc(f.discordId || "not set (use /guildlink in game)")}</div>
-      <div class="muted">${synced ? "Last upload " + esc(synced) + (r ? `: ${r.accepted} characters, ${r.recipesStored} recipes stored` : "") : "Not uploaded yet"}</div>
-      ${r && f.rosters ? guildLines("roster", "Guild roster", f.rosters, r.rostersStored, r.rostersUnverified, r.refused) : ""}
-      ${r && f.banks ? guildLines("bank", "Guild bank", f.banks, r.banksStored, r.banksUnverified, r.refused) : ""}
-      ${r && r.raidsStored ? `<div class="good">Raids: ${r.raidsStored} accepted</div>` : ""}
-      ${r && r.raidsUnverified ? `<div class="muted">${r.raidsUnverified} raid${r.raidsUnverified === 1 ? "" : "s"} not used: none of your linked characters was in ${r.raidsUnverified === 1 ? "it" : "them"}.</div>` : ""}
-      ${f.lastError ? `<div class="err">${esc(f.lastError)}</div>` : ""}${rejected}
+      <div><strong>${esc(f.flavor)}</strong> · ${th("account")} ${esc(f.account)} · ${th("charsRecipes", { c: f.characters, r: f.recipes })}</div>
+      <div class="muted">${th("addonDiscordId", { id: f.discordId ? esc(f.discordId) : th("discordIdNotSet") })}</div>
+      <div class="muted">${synced ? th("lastUpload", { when: esc(synced) }) + (r ? ": " + th("storedCounts", { c: r.accepted, r: r.recipesStored }) : "") : th("notUploaded")}</div>
+      ${r && f.rosters ? guildLines("roster", th("guildRoster"), f.rosters, r.rostersStored, r.rostersUnverified, r.refused) : ""}
+      ${r && f.banks ? guildLines("bank", th("guildBank"), f.banks, r.banksStored, r.banksUnverified, r.refused) : ""}
+      ${r && r.raidsStored ? `<div class="good">${th("raidsAccepted", { n: r.raidsStored })}</div>` : ""}
+      ${r && r.raidsUnverified ? `<div class="muted">${r.raidsUnverified === 1 ? th("raidsNotUsedOne") : th("raidsNotUsedMany", { n: r.raidsUnverified })}</div>` : ""}
+      ${f.lastError ? `<div class="err">${botMessage(f.lastError)}${help}</div>` : ""}${rejected}
       <div class="path">${esc(f.path)}</div>
     </div>`;
   }).join("");

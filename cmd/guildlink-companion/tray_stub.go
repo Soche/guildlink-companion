@@ -12,4 +12,6 @@ import (
 // stopped and is managed from the settings page.
 const trayAvailable = false
 
-func runTray(ctx context.Context, _ context.CancelFunc, _ string, _ *syncer.Syncer) { <-ctx.Done() }
+func runTray(ctx context.Context, _ context.CancelFunc, _ string, _ *syncer.Syncer, _ func() string) {
+	<-ctx.Done()
+}

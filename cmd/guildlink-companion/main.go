@@ -108,7 +108,7 @@ func main() {
 	if *headless || !trayAvailable {
 		<-ctx.Done()
 	} else {
-		runTray(ctx, cancel, srv.URL(), s)
+		runTray(ctx, cancel, srv.URL(), s, srv.Lang)
 	}
 
 	shutdownCtx, done := context.WithTimeout(context.Background(), 3*time.Second)

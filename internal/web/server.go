@@ -15,11 +15,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"guildlink/companion/internal/api"
 	"guildlink/companion/internal/autostart"
 	"guildlink/companion/internal/config"
+	"guildlink/companion/internal/i18n"
 	"guildlink/companion/internal/syncer"
 	"guildlink/companion/internal/update"
 	"guildlink/companion/internal/wow"
@@ -41,6 +43,9 @@ type Server struct {
 	csrf    string
 	port    int
 	srv     *http.Server
+	// The language the browser last asked for, for the tray while no
+	// language has been picked on the page.
+	browserLang atomic.Value
 }
 
 // Listen binds to localhost only; nothing here is reachable from the network.
@@ -61,6 +66,7 @@ func Listen(store *config.Store, s *syncer.Syncer, u *update.Updater, version st
 	mux.HandleFunc("GET /{$}", w.index)
 	mux.HandleFunc("GET /status", w.status)
 	mux.HandleFunc("POST /settings", w.saveSettings)
+	mux.HandleFunc("POST /language", w.setLanguage)
 	mux.HandleFunc("POST /sync", w.syncNow)
 	mux.HandleFunc("POST /test", w.testConnection)
 	mux.HandleFunc("GET /updates", w.updateStatus)
@@ -69,6 +75,28 @@ func Listen(store *config.Store, s *syncer.Syncer, u *update.Updater, version st
 	w.srv = &http.Server{Handler: w.guard(mux), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = w.srv.Serve(ln) }()
 	return w, nil
+}
+
+// lang is the language to show: the one picked with the flags, else the
+// browser's, else English.
+func (w *Server) lang(r *http.Request) string {
+	if r != nil {
+		if l := i18n.FromAcceptLanguage(r.Header.Get("Accept-Language")); l != "" {
+			w.browserLang.Store(l)
+		}
+	}
+	return w.Lang()
+}
+
+// Lang is the language for what isn't the page, like the tray menu.
+func (w *Server) Lang() string {
+	if l := w.store.Get().Language; i18n.Supported(l) {
+		return l
+	}
+	if l, ok := w.browserLang.Load().(string); ok && l != "" {
+		return l
+	}
+	return i18n.Default
 }
 
 func (w *Server) URL() string { return "http://127.0.0.1:" + strconv.Itoa(w.port) + "/" }
@@ -101,6 +129,11 @@ func (w *Server) guard(next http.Handler) http.Handler {
 }
 
 type pageData struct {
+	Lang      string
+	T         map[string]string // texts for the template and the script
+	TokenHint template.HTML
+	Languages []langLink
+
 	Settings   config.Settings
 	TokenSet   bool
 	CSRF       string
@@ -117,12 +150,23 @@ type pageData struct {
 	CanStartAtLogin bool
 }
 
+type langLink struct {
+	Code, Name string
+	Flag       template.HTML
+	Current    bool
+}
+
 type flavorChoice struct {
 	Name    string
 	Checked bool
 }
 
-func (w *Server) render(rw http.ResponseWriter, saved bool, saveErr string) {
+func (w *Server) render(rw http.ResponseWriter, r *http.Request, saved bool, saveErr string) {
+	lang := w.lang(r)
+	var langs []langLink
+	for _, l := range i18n.Languages {
+		langs = append(langs, langLink{Code: l.Code, Name: l.Name, Flag: template.HTML(l.Flag), Current: l.Code == lang})
+	}
 	s := w.store.Get()
 	token := s.Token
 	s.Token = ""
@@ -138,7 +182,9 @@ func (w *Server) render(rw http.ResponseWriter, saved bool, saveErr string) {
 		}
 	}
 	startAtLogin, _ := autostart.Enabled()
+	rw.Header().Set("Content-Language", lang)
 	_ = page.Execute(rw, pageData{
+		Lang: lang, T: i18n.Strings(lang), TokenHint: template.HTML(i18n.T(lang, "tokenHint")), Languages: langs,
 		Settings: s, TokenSet: token != "", CSRF: w.csrf, Version: w.version,
 		Detected: wow.DetectInstalls(), ConfigPath: w.store.Path(), Saved: saved, SaveError: saveErr,
 		AutoUpdate: !s.DisableAutoUpdate, Flavors: flavors,
@@ -147,7 +193,17 @@ func (w *Server) render(rw http.ResponseWriter, saved bool, saveErr string) {
 }
 
 func (w *Server) index(rw http.ResponseWriter, r *http.Request) {
-	w.render(rw, r.URL.Query().Has("saved"), "")
+	w.render(rw, r, r.URL.Query().Has("saved"), "")
+}
+
+// setLanguage keeps the language picked with the flags.
+func (w *Server) setLanguage(rw http.ResponseWriter, r *http.Request) {
+	s := w.store.Get()
+	if l := r.FormValue("lang"); i18n.Supported(l) {
+		s.Language = l
+		_ = w.store.Save(s)
+	}
+	http.Redirect(rw, r, "/", http.StatusSeeOther)
 }
 
 func (w *Server) status(rw http.ResponseWriter, _ *http.Request) {
@@ -172,7 +228,7 @@ func (w *Server) saveSettings(rw http.ResponseWriter, r *http.Request) {
 
 	if s.WowDir != "" {
 		if info, err := os.Stat(s.WowDir); err != nil || !info.IsDir() {
-			w.render(rw, false, "That World of Warcraft folder does not exist.")
+			w.render(rw, r, false, i18n.T(w.lang(r), "errNoFolder"))
 			return
 		}
 		// Accept the flavor folder (e.g. _classic_beta_) or its WTF folder too.
@@ -183,12 +239,12 @@ func (w *Server) saveSettings(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := w.store.Save(s); err != nil {
-		w.render(rw, false, "Could not save settings: "+err.Error())
+		w.render(rw, r, false, i18n.T(w.lang(r), "errSave", "err", err.Error()))
 		return
 	}
 	if w.version != "dev" {
 		if err := setStartAtLogin(r.FormValue("startAtLogin") == "on"); err != nil {
-			w.render(rw, false, "Settings saved, but starting with your computer couldn't be changed: "+err.Error())
+			w.render(rw, r, false, i18n.T(w.lang(r), "errStartAtLogin", "err", err.Error()))
 			return
 		}
 	}
@@ -217,7 +273,7 @@ func (w *Server) testConnection(rw http.ResponseWriter, r *http.Request) {
 	s := w.store.Get()
 	rw.Header().Set("Content-Type", "application/json")
 	if s.ServerURL == "" || s.Token == "" {
-		_ = json.NewEncoder(rw).Encode(map[string]string{"error": "Save the server address and token first."})
+		_ = json.NewEncoder(rw).Encode(map[string]string{"error": i18n.T(w.lang(r), "errSaveFirst")})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -227,7 +283,7 @@ func (w *Server) testConnection(rw http.ResponseWriter, r *http.Request) {
 		msg := err.Error()
 		var apiErr *api.Error
 		if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized {
-			msg = "The server rejected the token. Run /link regenerate:True in Discord for a new one."
+			msg = i18n.T(w.lang(r), "errToken")
 		}
 		_ = json.NewEncoder(rw).Encode(map[string]string{"error": msg})
 		return
